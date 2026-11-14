@@ -34,3 +34,7 @@ Each entry records a choice that the spec left open, or a place where the build 
     4. Encode as sRGB.
 
     A frame with no HDR highlights converts exactly. DXGI duplication does not support rotated outputs; those fall back to GDI.
+27. **The editor's event loop is created once and lives until exit.** winit cannot create a second event loop in one process, so closing the editor hides the window (`CancelClose` + `Visible(false)`). Other threads show it again with `ShowWindowAsync` + `SetForegroundWindow` (a hidden window gets no paint messages, so `update()` cannot do it), then `request_repaint()`. `ShowWindowAsync` never blocks the caller on the editor thread.
+28. **Editor texture filtering is fixed per texture:** nearest-neighbour magnification, linear minification with mipmaps. This gives crisp pixels above 100% and smooth downscaling below it, without re-uploading when the zoom crosses 100%. Images are split into tiles of at most 8192 px (or the driver limit, if lower).
+29. **Unnamed captures open as "dirty"** (never saved), so closing their tab asks Save / Don't Save / Cancel. Files opened from disk start clean.
+30. **Editor Copy runs `clipboard::copy_image` on a worker thread**, because encoding the PNG clipboard format can take more than a frame for large images. This requires `copy_image` to work from any thread (`OpenClipboard(NULL)`, no delayed rendering).
