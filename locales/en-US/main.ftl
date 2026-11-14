@@ -81,3 +81,8 @@ editor-close-tab = Close Tab
 editor-continue = Continue to { $dest }
 editor-zoom-fit = Fit
 editor-unsaved = Unsaved
+
+## Output
+notify-onenote-paste = The image is on the clipboard. Paste it into OneNote with Ctrl+V
+notify-printed = Sent to the printer
+notify-uploaded-no-url = Uploaded to { $host }

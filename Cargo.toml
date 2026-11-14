@@ -21,7 +21,7 @@ log = { version = "0.4", features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "tiff", "tga"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "tiff", "tga", "ico"] }
 webp = { version = "0.3", default-features = false }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts", "accesskit"] }
@@ -42,6 +42,7 @@ features = [
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
+    "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_Security_Cryptography",
