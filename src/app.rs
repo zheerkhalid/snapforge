@@ -46,6 +46,33 @@ pub struct CaptureRequest {
     pub exit_after: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordTarget {
+    FullScreen,
+    Window,
+    Region,
+    FixedRegion,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScreenTool {
+    ColorPicker,
+    Magnifier,
+    Crosshair,
+    Focus,
+    Ruler,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolWindow {
+    CombineImages,
+    ImagesToPdf,
+    BatchPrint,
+    ConvertToMp4,
+    ScheduleRecording,
+    Settings,
+}
+
 pub enum AppCommand {
     /// Start a capture with the current settings.
     Capture(CaptureMode),
@@ -81,6 +108,27 @@ pub enum AppCommand {
     },
     /// Command-line arguments forwarded from a second instance.
     ForwardedArgs(Vec<String>),
+
+    // ---- Phase 4: recorder
+    /// Start a screen recording (region modes show a selection overlay first).
+    Record(RecordTarget),
+    StopRecording,
+    TogglePauseRecording,
+    /// Open the video editor, optionally with a file.
+    OpenVideoEditor(Option<PathBuf>),
+
+    // ---- Phase 5: pin, OCR, screen tools
+    /// Select a region and recognize its text (OCR).
+    CaptureText,
+    /// Select a region and pin it to the screen.
+    PinCapture,
+    /// Pin an existing image (editor, clipboard).
+    PinImage(Image),
+    PinFromClipboard,
+    ScreenTool(ScreenTool),
+
+    // ---- Phase 2/4/6: tools and windows
+    OpenTool(ToolWindow),
     Exit,
 }
 

@@ -2,8 +2,14 @@
 //!
 //! Global access: [`get`] for a read snapshot, [`update`] to mutate and persist.
 
+pub mod draw;
 pub mod filename;
+pub mod ocr;
+pub mod pin;
+pub mod print;
+pub mod recorder;
 pub mod secret;
+pub mod tools;
 
 use crate::common::win;
 use serde::{Deserialize, Serialize};
@@ -533,6 +539,12 @@ pub struct Settings {
     pub hotkeys: HotkeySettings,
     pub toolbar: ToolbarSettings,
     pub editor: EditorSettings,
+    pub draw: draw::DrawSettings,
+    pub recorder: recorder::RecorderSettings,
+    pub pin: pin::PinSettings,
+    pub ocr: ocr::OcrSettings,
+    pub tools: tools::ToolsSettings,
+    pub print: print::PrintSettings,
 }
 
 impl Settings {

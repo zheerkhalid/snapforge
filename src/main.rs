@@ -14,6 +14,7 @@ mod controller;
 mod editor;
 mod hotkeys;
 mod i18n;
+mod integration;
 mod logging;
 mod output;
 mod overlay;

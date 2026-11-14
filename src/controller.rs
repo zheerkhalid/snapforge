@@ -409,6 +409,8 @@ fn execute(cmd: AppCommand) {
             // SAFETY: ends the UI thread's message loop.
             unsafe { PostQuitMessage(0) };
         }
+        // Phase 2-6 commands are dispatched in integration.rs.
+        other => crate::integration::execute(other),
     }
 }
 
