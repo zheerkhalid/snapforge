@@ -420,7 +420,7 @@ fn refresh_ui() {
 // ------------------------------------------------------------------ capture flows
 
 fn our_windows() -> Vec<isize> {
-    vec![toolbar::hwnd(), app::app_hwnd()].into_iter().filter(|&h| h != 0).collect()
+    vec![toolbar::hwnd(), app::app_hwnd(), overlay::overlay_hwnd()].into_iter().filter(|&h| h != 0).collect()
 }
 
 fn start_capture(req: CaptureRequest) {
@@ -885,6 +885,7 @@ fn schedule_idle() {
 /// Release capture resources and trim the working set after a quiet period.
 fn go_idle() {
     capture::release_idle_resources();
+    overlay::release_idle_resources();
     if !editor::is_running() {
         use windows::Win32::System::Threading::{GetCurrentProcess, SetProcessWorkingSetSize};
         // SAFETY: trimming our own working set.
