@@ -94,3 +94,6 @@ toolbar-delay-tip = Delay Before Capture: { $delay }
 notify-onenote-paste = The image is on the clipboard. Paste it into OneNote with Ctrl+V
 notify-printed = Sent to the printer
 notify-uploaded-no-url = Uploaded to { $host }
+## Overlay (adjust mode) and countdown
+hint-adjust = Drag inside to move · Drag handles to resize · Arrows move 1 px · Shift+arrows resize · Enter or double-click captures · Right-click reselects
+countdown-cancel = Esc to cancel

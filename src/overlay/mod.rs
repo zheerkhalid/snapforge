@@ -9,6 +9,17 @@
 //!   `capture.show_magnifier`, `capture.show_crosshair`, `capture.capture_on_release`,
 //!   `capture.fixed_presets`, `capture.fixed_index` (persist when changed).
 
+mod countdown;
+pub mod logic;
+pub mod loupe;
+mod paint;
+mod render;
+pub mod scene;
+mod window;
+
+#[cfg(test)]
+mod harness;
+
 use crate::capture::WindowEntry;
 use crate::common::{Image, Point, Rect};
 use std::sync::atomic::{AtomicBool, AtomicI64};
@@ -52,20 +63,29 @@ pub static BENCH_AUTOCANCEL: AtomicBool = AtomicBool::new(false);
 pub static LAST_FIRST_PAINT_QPC: AtomicI64 = AtomicI64::new(0);
 
 pub fn select(frozen: &Frozen, mode: OverlayMode) -> Option<Selection> {
-    let _ = (frozen, mode);
-    None
+    window::select(frozen, mode)
 }
 
 /// Produce the final image for a selection from the frozen screen: crop for rectangles
 /// and windows; anti-aliased transparent mask outside a polygon; transparent outside
 /// the union of rectangles for multi-selection (bounding box size).
 pub fn render_selection(frozen: &Frozen, sel: &Selection) -> Image {
-    let _ = (frozen, sel);
-    Image::new(1, 1)
+    render::render_selection(frozen, sel)
 }
 
 /// Modal on-screen countdown (excluded from capture). Returns false if cancelled (Esc).
 pub fn countdown(seconds: u32) -> bool {
-    let _ = seconds;
-    true
+    countdown::countdown(seconds)
+}
+
+/// The overlay window handle (0 before the first [`select`]); pass it to
+/// `capture::snapshot_windows` as an exclusion.
+pub fn overlay_hwnd() -> isize {
+    window::overlay_hwnd()
+}
+
+/// Free the cached screen-sized bitmaps kept between overlays (about 8 bytes per
+/// virtual-screen pixel). The next [`select`] re-allocates them.
+pub fn release_idle_resources() {
+    window::release_idle_resources()
 }
