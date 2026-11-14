@@ -19,6 +19,7 @@ mod logging;
 mod output;
 mod overlay;
 mod settings;
+mod settings_ui;
 mod toolbar;
 mod tray;
 

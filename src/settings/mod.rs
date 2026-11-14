@@ -4,6 +4,7 @@
 
 pub mod draw;
 pub mod filename;
+pub mod import_export;
 pub mod ocr;
 pub mod pin;
 pub mod print;
