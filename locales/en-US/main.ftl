@@ -90,3 +90,7 @@ hotkey-hook-failed = Could not install the keyboard hook for { $key }
 ## Toolbar tooltips
 toolbar-output-tip = Output To: { $dest }
 toolbar-delay-tip = Delay Before Capture: { $delay }
+## Output
+notify-onenote-paste = The image is on the clipboard. Paste it into OneNote with Ctrl+V
+notify-printed = Sent to the printer
+notify-uploaded-no-url = Uploaded to { $host }
