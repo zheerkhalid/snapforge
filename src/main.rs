@@ -6,7 +6,9 @@
 #![allow(dead_code)]
 
 mod app;
+mod bench;
 mod capture;
+mod cli;
 mod common;
 mod controller;
 mod editor;
