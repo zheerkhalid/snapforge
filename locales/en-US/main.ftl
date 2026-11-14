@@ -81,3 +81,12 @@ editor-close-tab = Close Tab
 editor-continue = Continue to { $dest }
 editor-zoom-fit = Fit
 editor-unsaved = Unsaved
+
+## Hotkeys
+hotkey-conflict = { $key } is assigned to both “{ $a }” and “{ $b }”
+hotkey-invalid = Unrecognized hotkey “{ $key }” for { $action }
+hotkey-hook-failed = Could not install the keyboard hook for { $key }
+
+## Toolbar tooltips
+toolbar-output-tip = Output To: { $dest }
+toolbar-delay-tip = Delay Before Capture: { $delay }
