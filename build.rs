@@ -1,6 +1,8 @@
 //! Build script: renders the original SnapForge icon (vector, via tiny-skia) into a
 //! multi-size .ico, then compiles the Win32 resources (icon, manifest, version info).
 
+#![allow(clippy::field_reassign_with_default)]
+
 use std::{env, fs, path::PathBuf};
 use tiny_skia::*;
 
@@ -122,9 +124,7 @@ fn main() {
     let (ma, mi, pa) = (parts[0], parts.get(1).copied().unwrap_or(0), parts.get(2).copied().unwrap_or(0));
     let ver4 = format!("{ma}.{mi}.{pa}.0");
 
-    let manifest = fs::read_to_string("res/snapforge.manifest.in")
-        .expect("manifest")
-        .replace("@VERSION4@", &ver4);
+    let manifest = fs::read_to_string("res/snapforge.manifest.in").expect("manifest").replace("@VERSION4@", &ver4);
     let manifest_path = out.join("snapforge.manifest");
     fs::write(&manifest_path, manifest).expect("write manifest");
 

@@ -10,16 +10,16 @@ use windows::Win32::Graphics::Dwm::{
     DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
 };
 use windows::Win32::Graphics::Gdi::{
-    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, HDC, HMONITOR, MONITORINFO,
-    MONITORINFOEXW, MONITOR_DEFAULTTONEAREST,
+    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW,
+    MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Shell::{SHGetKnownFolderPath, KNOWN_FOLDER_FLAG};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetCursorPos, GetSystemMetrics, GetWindowRect, SetWindowDisplayAffinity, SM_CXVIRTUALSCREEN,
-    SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WDA_EXCLUDEFROMCAPTURE,
+    GetCursorPos, GetSystemMetrics, GetWindowRect, SetWindowDisplayAffinity, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WDA_EXCLUDEFROMCAPTURE,
 };
 
 /// UTF-16, NUL-terminated.
@@ -164,9 +164,7 @@ pub fn window_bounds(hwnd: HWND) -> Rect {
 pub fn is_cloaked(hwnd: HWND) -> bool {
     let mut v: u32 = 0;
     // SAFETY: valid out pointer.
-    unsafe {
-        DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut v as *mut u32 as *mut c_void, 4).is_ok() && v != 0
-    }
+    unsafe { DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut v as *mut u32 as *mut c_void, 4).is_ok() && v != 0 }
 }
 
 /// Keep our own UI (toolbar, countdown, recorder bar) out of every capture API.
@@ -263,7 +261,5 @@ pub fn shell_open(path: &str) {
 
 /// Open Explorer with `path` selected.
 pub fn reveal_in_explorer(path: &std::path::Path) {
-    let _ = std::process::Command::new("explorer.exe")
-        .arg(format!("/select,{}", path.display()))
-        .spawn();
+    let _ = std::process::Command::new("explorer.exe").arg(format!("/select,{}", path.display())).spawn();
 }

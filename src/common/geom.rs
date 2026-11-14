@@ -75,12 +75,7 @@ impl Rect {
         if o.is_empty() {
             return *self;
         }
-        Rect::from_ltrb(
-            self.x.min(o.x),
-            self.y.min(o.y),
-            self.right().max(o.right()),
-            self.bottom().max(o.bottom()),
-        )
+        Rect::from_ltrb(self.x.min(o.x), self.y.min(o.y), self.right().max(o.right()), self.bottom().max(o.bottom()))
     }
 
     pub fn inflate(&self, d: i32) -> Rect {

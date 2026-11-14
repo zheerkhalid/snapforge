@@ -1,2 +1,26 @@
+//! SnapForge: fast, native Windows screen capture, annotation and recording.
+//! Developed by Zheer Khalid (https://zheer.dev).
+
 #![windows_subsystem = "windows"]
-fn main() {}
+// Temporary while Phase 1 modules are being filled in; removed at integration.
+#![allow(dead_code)]
+
+mod app;
+mod capture;
+mod common;
+mod controller;
+mod editor;
+mod hotkeys;
+mod i18n;
+mod logging;
+mod output;
+mod overlay;
+mod settings;
+mod toolbar;
+mod tray;
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let code = controller::main_entry(args);
+    std::process::exit(code);
+}
