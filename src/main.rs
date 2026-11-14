@@ -20,6 +20,7 @@ mod output;
 mod overlay;
 mod settings;
 mod toolbar;
+mod tools;
 mod tray;
 
 fn main() {
