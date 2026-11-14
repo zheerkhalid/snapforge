@@ -81,3 +81,7 @@ editor-close-tab = Close Tab
 editor-continue = Continue to { $dest }
 editor-zoom-fit = Fit
 editor-unsaved = Unsaved
+
+## Overlay (adjust mode) and countdown
+hint-adjust = Drag inside to move · Drag handles to resize · Arrows move 1 px · Shift+arrows resize · Enter or double-click captures · Right-click reselects
+countdown-cancel = Esc to cancel
