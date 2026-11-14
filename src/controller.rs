@@ -1000,3 +1000,34 @@ pub fn root_window_at(x: i32, y: i32) -> isize {
         hwnd_to_isize(GetAncestor(h, GA_ROOT))
     }
 }
+
+/// Let the user select a region (frozen-screen overlay) and return its image and screen
+/// rect. Used by Pin Capture, Capture Text and other tools. `None` if cancelled or busy.
+pub(crate) fn select_region_image() -> Option<(Image, crate::common::Rect)> {
+    if BUSY.with(|b| b.replace(true)) {
+        return None;
+    }
+    let opts = GrabOptions::from_settings();
+    let result = freeze(&opts).ok().and_then(|frozen| {
+        let sel = overlay::select(&frozen, OverlayMode::Region)?;
+        let rect = match &sel {
+            Selection::Rect(r) | Selection::Window { rect: r, .. } => *r,
+            Selection::Polygon(p) => {
+                let (mut l, mut t, mut r, mut b) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+                for pt in p {
+                    l = l.min(pt.x);
+                    t = t.min(pt.y);
+                    r = r.max(pt.x);
+                    b = b.max(pt.y);
+                }
+                crate::common::Rect::from_ltrb(l, t, r + 1, b + 1)
+            }
+            Selection::Multi(rs) => rs.iter().fold(crate::common::Rect::default(), |a, r| a.union(r)),
+        };
+        let img = overlay::render_selection(&frozen, &sel);
+        (!img.is_empty()).then_some((img, rect))
+    });
+    BUSY.with(|b| b.set(false));
+    schedule_idle();
+    result
+}
