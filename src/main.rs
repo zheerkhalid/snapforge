@@ -25,6 +25,7 @@ mod pin;
 mod settings;
 mod settings_ui;
 mod toolbar;
+mod tools;
 mod tray;
 
 fn main() {
