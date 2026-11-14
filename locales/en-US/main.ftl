@@ -97,3 +97,33 @@ notify-uploaded-no-url = Uploaded to { $host }
 ## Overlay (adjust mode) and countdown
 hint-adjust = Drag inside to move · Drag handles to resize · Arrows move 1 px · Shift+arrows resize · Enter or double-click captures · Right-click reselects
 countdown-cancel = Esc to cancel
+## Pin
+pin-window-title = Pinned Image
+pin-menu-copy = Copy
+pin-menu-save-as = Save As…
+pin-menu-editor = Send to Editor
+pin-menu-editor-all = Send All Pins to Editor
+pin-menu-zoom-100 = Zoom 100%
+pin-menu-opacity = Opacity
+pin-menu-draw = Draw Mode
+pin-menu-hide = Hide to Top Edge
+pin-menu-close = Close
+pin-menu-close-all = Close All Pins
+pin-badge-opacity = Opacity { $pct }%
+pin-badge-copied = Copied
+pin-badge-saved = Saved
+pin-clipboard-empty = The clipboard does not contain an image to pin
+## OCR
+ocr-title = Capture Text
+ocr-language = Language
+ocr-status-working = Recognizing text…
+ocr-status-done = { $lines } lines · { $words } words
+ocr-status-none = No text found
+ocr-status-failed = Text recognition failed
+ocr-status-copied = Copied to clipboard
+ocr-status-no-selection = Select some text first
+ocr-no-language = No OCR language is installed. Add a language with “Optical character recognition” in Settings › Time & language › Language & region, then try again.
+ocr-keep-breaks = Keep line breaks
+ocr-copy-all = Copy All
+ocr-copy-selected = Copy Selected
+ocr-close = Close
