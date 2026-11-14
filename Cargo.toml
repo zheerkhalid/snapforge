@@ -26,6 +26,8 @@ webp = { version = "0.3", default-features = false }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts", "accesskit"] }
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+pdf-writer = "0.12"
+miniz_oxide = "0.8"
 
 [dependencies.windows]
 version = "0.58"
