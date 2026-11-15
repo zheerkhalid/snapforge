@@ -115,6 +115,18 @@ The editor's left palette holds every drawing tool. Annotations stay editable ob
 
 - `Tab` / `Shift+Tab` cycle through the tools in palette order. `F1` lists every shortcut.
 - Right-click a palette tool and choose **Set as Default Tool**: the **Draw** destination opens captures with it.
+- **Tool size.** The pointer shows how large the tool is at the current zoom: a ring the size of the tip for the pencil, the line highlighter, the eraser and the Clone Stamp, the outline of the stamp for the step tool, and a dot as thick as the stroke beside the crosshair for lines, arrows and shapes. Change the size with the slider in the properties bar (the number next to it still takes an exact value), or without leaving the picture:
+
+  | Key | Action |
+  |---|---|
+  | `]` / `[` | Larger / smaller: pen and stroke width, eraser and Clone Stamp radius, step stamp size, blur / pixelate strength, font size of text and callouts |
+  | `Alt+wheel` | The same, over the picture |
+  | wheel | Eraser and Clone Stamp size (as before) |
+
+  ![Pencil with the size ring, the size label and the width slider](screenshots/editor-brush-size.png)
+
+  The new size is shown next to the pointer for a moment. When annotations are selected, the slider, the keys and `Alt+wheel` resize them instead (one undo step per drag or burst of key presses) and new objects of that kind follow. `Ctrl+wheel` zooms and `Shift+wheel` scrolls sideways, as everywhere.
+- Pencil, line highlighter and eraser strokes are not selected after drawing, so the next stroke can start on top of the last one. Pick a stroke with the Select tool (`F2`) to move, restyle or delete it.
 - Arrow keys move the selected annotations (with Shift, 10 px). `Ctrl+J` duplicates, `Del` deletes, `Ctrl+C` / `Ctrl+V` copy and paste them, `Ctrl+A` selects them all. Polylines and polygons end with a double-click, Enter or Esc.
 - Pixel edits (effects, crop) and annotation edits share one undo history (`Ctrl+Z` / `Ctrl+Y`).
 - **File ▸ Save Project (.sfcap)** (`Ctrl+Alt+S`) keeps the annotations editable; open a project with File ▸ Open or by dropping it on the editor. When you save an annotated image, an editable `.sfcap` copy is saved next to it (setting `draw.autosave_project`, on by default; if that folder is read-only it goes to the `autosave` folder in the settings folder).
