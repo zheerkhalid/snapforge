@@ -12,6 +12,7 @@ mod cli;
 mod common;
 mod compose;
 mod controller;
+mod draw;
 mod editor;
 mod effects;
 mod hotkeys;
