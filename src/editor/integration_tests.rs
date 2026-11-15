@@ -63,8 +63,16 @@ fn doc() -> Document {
 
 fn rect_object(id: u64, x: f32) -> Object {
     let st = draw::default_style(Tool::Rect);
-    draw::create(Tool::Rect, id, &st, &draw::ToolOptions::for_tool(Tool::Rect), Pt::new(x, 2.0), Pt::new(x + 10.0, 12.0), &[])
-        .expect("rect")
+    draw::create(
+        Tool::Rect,
+        id,
+        &st,
+        &draw::ToolOptions::for_tool(Tool::Rect),
+        Pt::new(x, 2.0),
+        Pt::new(x + 10.0, 12.0),
+        &[],
+    )
+    .expect("rect")
 }
 
 fn ids(d: &Document) -> Vec<u64> {
@@ -233,4 +241,75 @@ fn draw_tool_commands_have_fkeys_and_tab() {
     }
     // Layer geometry helper used by the eye dropper / creation.
     assert!(RectF::from_points(Pt::new(3.0, 3.0), Pt::new(1.0, 1.0)).w > 0.0);
+}
+
+/// Writes a demo image and project for manual / screenshot checks:
+/// `SNAPFORGE_DEMO_DIR=... cargo test make_demo_files -- --ignored`.
+#[test]
+#[ignore]
+fn make_demo_files() {
+    let Ok(dir) = std::env::var("SNAPFORGE_DEMO_DIR") else { return };
+    let dir = PathBuf::from(dir);
+    let _ = std::fs::create_dir_all(&dir);
+    // A fake app window: title bar, sidebar, cards.
+    let (w, h) = (1100u32, 700u32);
+    let mut img = Image::filled(w, h, [0xF4, 0xF1, 0xEE, 255]);
+    let fill = |img: &mut Image, r: Rect, c: [u8; 4]| {
+        for y in r.y..r.bottom() {
+            for x in r.x..r.right() {
+                img.set_pixel(x as u32, y as u32, c);
+            }
+        }
+    };
+    fill(&mut img, Rect::new(0, 0, w as i32, 48), [0x5A, 0x3C, 0x2B, 255]);
+    fill(&mut img, Rect::new(0, 48, 220, h as i32 - 48), [0xE6, 0xE1, 0xDC, 255]);
+    for i in 0..6 {
+        fill(&mut img, Rect::new(24, 80 + i * 44, 160, 14), [0xB0, 0xA8, 0xA0, 255]);
+    }
+    for (i, c) in [[0xE5u8, 0x9A, 0x3B, 255], [0x4C, 0xAF, 0x50, 255], [0xC0, 0x6B, 0x36, 255]].iter().enumerate() {
+        let x = 260 + i as i32 * 270;
+        fill(&mut img, Rect::new(x, 90, 240, 160), [255, 255, 255, 255]);
+        fill(&mut img, Rect::new(x, 90, 240, 8), *c);
+        fill(&mut img, Rect::new(x + 20, 130, 150, 14), [0x90, 0x90, 0x90, 255]);
+        fill(&mut img, Rect::new(x + 20, 160, 190, 10), [0xC8, 0xC8, 0xC8, 255]);
+        fill(&mut img, Rect::new(x + 20, 180, 120, 10), [0xC8, 0xC8, 0xC8, 255]);
+    }
+    fill(&mut img, Rect::new(260, 290, 780, 360), [255, 255, 255, 255]);
+    for i in 0..8 {
+        fill(&mut img, Rect::new(290, 320 + i * 38, 600 - i * 40, 12), [0xD0, 0xD0, 0xD0, 255]);
+    }
+    let _ = crate::output::save::save_image(&img, &dir.join("demo.png"));
+
+    let mut objs = Vec::new();
+    let mut add = |tool: Tool, a: Pt, b: Pt, f: &dyn Fn(&mut Object)| {
+        let id = objs.len() as u64 + 1;
+        if let Some(mut o) =
+            draw::create(tool, id, &draw::default_style(tool), &draw::ToolOptions::for_tool(tool), a, b, &objs)
+        {
+            f(&mut o);
+            objs.push(o);
+        }
+    };
+    add(Tool::Arrow, Pt::new(620.0, 470.0), Pt::new(760.0, 300.0), &|o| o.style.width = 6.0);
+    add(Tool::Rect, Pt::new(250.0, 82.0), Pt::new(510.0, 258.0), &|_| {});
+    add(Tool::Callout, Pt::new(560.0, 500.0), Pt::new(800.0, 560.0), &|o| {
+        if let Kind::Text(t) = &mut o.kind {
+            t.text = "New dashboard layout".into();
+            if let Some(tail) = &mut t.tail {
+                tail.tip = Pt::new(520.0, 470.0);
+            }
+        }
+    });
+    add(Tool::Step, Pt::new(240.0, 80.0), Pt::new(240.0, 80.0), &|_| {});
+    add(Tool::Step, Pt::new(510.0, 80.0), Pt::new(510.0, 80.0), &|_| {});
+    add(Tool::Highlighter, Pt::new(285.0, 314.0), Pt::new(900.0, 338.0), &|_| {});
+    add(Tool::Text, Pt::new(860.0, 60.0), Pt::new(1080.0, 90.0), &|o| {
+        if let Kind::Text(t) = &mut o.kind {
+            t.text = "SnapForge".into();
+        }
+    });
+    add(Tool::Blur, Pt::new(820.0, 120.0), Pt::new(1040.0, 200.0), &|_| {});
+    add(Tool::Ellipse, Pt::new(16.0, 120.0), Pt::new(200.0, 160.0), &|o| o.style.color = draw::Color::GREEN);
+    add(Tool::Magnifier, Pt::new(300.0, 470.0), Pt::new(360.0, 520.0), &|_| {});
+    let _ = draw::save_sfcap(&dir.join("demo.sfcap"), &img, &objs, &draw::Meta::new("demo", "demo"));
 }

@@ -26,9 +26,86 @@ pub fn show_and_focus(hwnd: isize) {
         if !IsWindow(h).as_bool() {
             return;
         }
+        unghost(hwnd);
         let cmd = if IsIconic(h).as_bool() { SW_RESTORE } else { SW_SHOW };
         let _ = ShowWindowAsync(h, cmd);
         let _ = SetForegroundWindow(h);
+    }
+}
+
+/// Make the (hidden) window invisible and click-through even when shown, until [`hide`].
+pub fn make_ghost(hwnd: isize) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW, GWL_EXSTYLE, LWA_ALPHA,
+    };
+    if hwnd == 0 {
+        return;
+    }
+    let h = hwnd_from_isize(hwnd);
+    // SAFETY: plain calls on our own window.
+    unsafe {
+        let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+        SetWindowLongPtrW(h, GWL_EXSTYLE, ex | ghost_styles());
+        let _ = SetLayeredWindowAttributes(h, windows::Win32::Foundation::COLORREF(0), 0, LWA_ALPHA);
+    }
+}
+
+/// Extended styles [`show_ghost`] adds for the pump frame.
+fn ghost_styles() -> isize {
+    use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT};
+    (WS_EX_TOOLWINDOW.0 | WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) as isize
+}
+
+/// Hide without activating anything and drop the styles [`show_ghost`] added. Used for the
+/// start-hidden editor (eframe shows the root window after its first frame).
+pub fn hide(hwnd: isize) {
+    if hwnd != 0 {
+        // SAFETY: plain call on our own window.
+        unsafe {
+            let _ = ShowWindowAsync(hwnd_from_isize(hwnd), windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
+        }
+        unghost(hwnd);
+    }
+}
+
+/// Undo [`make_ghost`] (before the window is really shown).
+pub fn unghost(hwnd: isize) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE};
+    if hwnd == 0 {
+        return;
+    }
+    let h = hwnd_from_isize(hwnd);
+    // SAFETY: plain calls on our own window.
+    unsafe {
+        let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+        if ex & ghost_styles() != 0 {
+            SetWindowLongPtrW(h, GWL_EXSTYLE, ex & !ghost_styles());
+        }
+    }
+}
+
+/// A hidden window gets no paint messages, so it runs no frames and a request for it (open
+/// Settings) would wait forever; off-screen windows get none either. Show it in place as
+/// an invisible, click-through tool window (layered with alpha 0, no taskbar button, never
+/// activated) so it runs a frame; the app hides it again right away ([`hide`]).
+pub fn show_ghost(hwnd: isize) {
+    use windows::Win32::UI::WindowsAndMessaging::{SWP_ASYNCWINDOWPOS, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW};
+    if hwnd == 0 || is_visible(hwnd) {
+        return;
+    }
+    make_ghost(hwnd);
+    let h = hwnd_from_isize(hwnd);
+    // SAFETY: plain call on our own window.
+    unsafe {
+        let flags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_ASYNCWINDOWPOS;
+        let _ = SetWindowPos(h, None, 0, 0, 0, 0, flags);
+    }
+}
+/// Saved placement if valid, else the default size fitted to the work area.
+pub fn initial_placement(hwnd: isize, saved: Option<[i32; 4]>) {
+    match saved {
+        Some(p) if restore_placement(hwnd, p) => {}
+        _ => fit_to_work_area(hwnd),
     }
 }
 
@@ -102,7 +179,10 @@ pub fn fit_to_work_area(hwnd: isize) {
         return;
     }
     let r = crate::common::win::window_bounds(hwnd_from_isize(hwnd));
-    let Some(m) = crate::common::win::monitor_at(r.center()) else { return };
+    let m = crate::common::win::monitor_at(r.center())
+        .or_else(|| crate::common::win::monitor_at(crate::common::win::cursor_pos()))
+        .or_else(|| monitors().into_iter().next());
+    let Some(m) = m else { return };
     let f = fitted_rect(r.w, r.h, m.work);
     let (x, y, w, h) = (f.x, f.y, f.w, f.h);
     // SAFETY: plain call on our own (still hidden) window.

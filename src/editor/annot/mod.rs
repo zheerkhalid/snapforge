@@ -159,6 +159,10 @@ pub struct DrawState {
     pub palette_hidden: bool,
     /// Colours used since the last save of the recent list.
     recent: Vec<Color>,
+    /// The current move / handle drag passed the click threshold.
+    drag_moved: bool,
+    /// Canvas mapping when the button went down (drags keep using it).
+    press_map: Option<CanvasMap>,
 }
 
 impl Default for DrawState {
@@ -182,6 +186,8 @@ impl Default for DrawState {
             requests: Vec::new(),
             palette_hidden: false,
             recent: Vec::new(),
+            drag_moved: false,
+            press_map: None,
         }
     }
 }
@@ -262,6 +268,14 @@ impl DrawState {
             o.eraser_radius = (r * if input.scroll > 0.0 { 1.15 } else { 1.0 / 1.15 }).clamp(1.0, 500.0);
         }
 
+        // While the button is held, map the pointer with the canvas mapping of the press:
+        // panels appearing on selection (the properties bar) shift the canvas, and the
+        // drag must follow the pointer on screen, not jump with the layout.
+        let held = |m: CanvasMap| {
+            let s = input.map.to_screen(pf);
+            let q = m.to_image(s);
+            Pt::new(q[0] as f32, q[1] as f32)
+        };
         if input.pressed {
             if let Some(slot) = self.pick.take() {
                 let (x, y) = (p.x.floor() as i64, p.y.floor() as i64);
@@ -270,14 +284,17 @@ impl DrawState {
                 }
                 return;
             }
+            self.press_map = Some(input.map);
             self.press(tool, doc, p, input);
         } else if input.down {
-            self.drag_to(doc, p, input);
+            let dp = self.press_map.map(held).unwrap_or(p);
+            self.drag_to(doc, dp, input);
         } else if self.poly.is_some() {
             self.poly_hover(doc, p);
         }
         if input.released {
-            self.release(doc, p);
+            let rp = self.press_map.take().map(held).unwrap_or(p);
+            self.release(doc, rp);
         }
         if input.double_clicked {
             self.double_click(tool, doc, p, scale);
@@ -320,6 +337,7 @@ impl DrawState {
 
     fn press(&mut self, tool: Tool, doc: &mut Document, p: Pt, input: &ToolInput) {
         let scale = input.map.scale.max(1e-4);
+        self.drag_moved = false;
         let shift = input.modifiers.shift;
         if self.editing.is_some() {
             self.finish_text(doc);
@@ -477,7 +495,9 @@ impl DrawState {
                 let b = if fill { a } else { b };
                 if let Some(mut o) = create(tool, id, &ts.style, &ts.options, a, b, &others) {
                     // Keep text typed so far (never happens during a create drag, but cheap).
-                    if let (Kind::Text(n), Some(Kind::Text(old))) = (&mut o.kind, find(l.objects(), id).map(|x| &x.kind)) {
+                    if let (Kind::Text(n), Some(Kind::Text(old))) =
+                        (&mut o.kind, find(l.objects(), id).map(|x| &x.kind))
+                    {
                         n.text = old.text.clone();
                     }
                     replace(l.objects_mut(), o);
@@ -498,7 +518,13 @@ impl DrawState {
                     }
                 }
             }
+            Drag::Move { start, .. } | Drag::Handle { start, .. }
+                if !self.drag_moved && (p - *start).len() * input.map.scale < 3.0 =>
+            {
+                // A click, not a drag yet: change nothing.
+            }
             Drag::Move { start, snaps, .. } => {
+                self.drag_moved = true;
                 let mut d = p - *start;
                 if m.shift {
                     d = dedit::constrain_to_hv(Pt::default(), d);
@@ -511,6 +537,7 @@ impl DrawState {
                 }
             }
             Drag::Handle { handle, start, snap, .. } => {
+                self.drag_moved = true;
                 let c = DragConstraints { keep_aspect: m.shift, from_center: m.alt, snap_angle: m.shift };
                 let mut o = (**snap).clone();
                 drag_handle(&mut o, *handle, p - *start, &c);
@@ -776,7 +803,10 @@ impl DrawState {
                     HandleKind::Control => {
                         if let Kind::Line(l) = &o.kind {
                             for q in [l.points.first(), l.points.last()].into_iter().flatten() {
-                                painter.line_segment([to(*q), to(h.pos)], Stroke::new(1.0_f32, ACCENT.gamma_multiply(0.6)));
+                                painter.line_segment(
+                                    [to(*q), to(h.pos)],
+                                    Stroke::new(1.0_f32, ACCENT.gamma_multiply(0.6)),
+                                );
                             }
                         }
                     }
@@ -882,7 +912,8 @@ impl DrawState {
 
     pub fn select_all(&mut self, doc: &Document) -> bool {
         self.sync_doc(doc);
-        let ids: Vec<ObjectId> = layer::layer(doc).map(|l| l.objects().iter().map(|o| o.id).collect()).unwrap_or_default();
+        let ids: Vec<ObjectId> =
+            layer::layer(doc).map(|l| l.objects().iter().map(|o| o.id).collect()).unwrap_or_default();
         let any = !ids.is_empty();
         self.sel = ids;
         any
@@ -1055,7 +1086,7 @@ impl CanvasTool for DrawTool {
     fn label(&self) -> String {
         tool_label(self.tool)
     }
-    fn icon(&self) -> &str {
+    fn icon(&self) -> &'static str {
         glyph(self.tool)
     }
     fn shortcut(&self) -> Option<&str> {

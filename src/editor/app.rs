@@ -4,14 +4,12 @@
 
 use super::annot;
 use super::canvas::{self, CanvasCtx, CanvasState};
-use super::fx_session::{self, FxSession, SessionOutcome};
-use super::tools_dialogs::{ToolsDialogs, ToolsEvent};
-use crate::settings_ui::SettingsWindow;
 use super::commands::{Action, CmdState, CommandRegistry, ToolId, ZoomCmd};
 use super::document::{push_recent, DocId, Document, SaveTarget, Tabs};
 use super::effects::{EffectRegistry, Scope};
 use super::ext::{CanvasTool, ToolsContext};
 use super::fileops::{self, FileWatcher};
+use super::fx_session::{self, FxSession, SessionOutcome};
 use super::history::{Budget, MB};
 use super::jobs::{EffectTarget, JobQueue, JobResult, Jobs};
 use super::modals::Modal;
@@ -19,12 +17,14 @@ use super::palette::{self, PaletteOutcome, PaletteState};
 use super::param_dialog::{DialogOutcome, EffectDialog};
 use super::selection::Selection;
 use super::style::{self, Palette};
+use super::tools_dialogs::{ToolsDialogs, ToolsEvent};
 use super::{dialogs, texture, view, window, EditorMsg, LAST_IMAGE_PRESENTED_QPC};
 use crate::app::{post, AppCommand};
 use crate::common::time::{qpc_ms, qpc_now};
 use crate::common::{win, Image};
 use crate::i18n::{t, tf};
 use crate::settings::{self, Destination};
+use crate::settings_ui::SettingsWindow;
 use eframe::egui::{
     self, vec2, Align2, Color32, CornerRadius, Id, Key, Margin, RichText, Stroke, TextureHandle, ViewportCommand,
 };
@@ -147,6 +147,8 @@ pub struct EditorApp {
     paste_text: Option<String>,
     /// HOOK(video-editor): hosts the video editor window.
     video: VideoEditorHost,
+    /// Started hidden: keep hiding for these first frames (eframe shows after frame 1).
+    hide_frames: u8,
 }
 
 /// HOOK(video-editor): placeholder host for `video_editor::VideoEditorWindow` (same shape
@@ -178,10 +180,11 @@ impl EditorApp {
         if hwnd != 0 {
             let h = win::hwnd_from_isize(hwnd);
             win::set_dark_titlebar(h, dark);
-            let saved = settings::get().editor.window;
-            match saved {
-                Some(p) if window::restore_placement(hwnd, p) => {}
-                _ => window::fit_to_work_area(hwnd),
+            window::initial_placement(hwnd, settings::get().editor.window);
+            if super::start_hidden() {
+                // Only the Settings window was asked for: eframe shows this window after
+                // its first frame, so make that invisible; it is hidden right after.
+                window::make_ghost(hwnd);
             }
         }
         super::register_window(ctx.clone(), hwnd);
@@ -232,8 +235,12 @@ impl EditorApp {
             fx: None,
             paste_text: None,
             video: VideoEditorHost::default(),
+            hide_frames: 0,
         };
-        app.visible = !super::start_hidden();
+        if super::start_hidden() {
+            app.visible = false;
+            app.hide_frames = 3;
+        }
         app.apply_workspace_filter();
         app.restore_workspaces();
         app
@@ -336,13 +343,17 @@ impl EditorApp {
                         None => self.settings_win.open(),
                     }
                     self.settings_icon_done = false;
+                    self.pumped_hidden();
                 }
                 EditorMsg::OpenTool(kind, tctx) => {
                     let tctx = tctx.unwrap_or_else(|| self.tools_context());
                     self.tools_dlg.open(kind, tctx);
                     show = true;
                 }
-                EditorMsg::OpenVideo(path) => self.video.open(path),
+                EditorMsg::OpenVideo(path) => {
+                    self.video.open(path);
+                    self.pumped_hidden();
+                }
                 EditorMsg::OpenFiles(paths) => {
                     self.open_paths(paths);
                     show = true;
@@ -358,6 +369,8 @@ impl EditorApp {
             }
         }
         if show && !self.allow_close {
+            self.hide_frames = 0;
+            window::unghost(self.hwnd);
             if !self.visible {
                 // Shown from another thread with ShowWindow; keep winit's state in sync.
                 ctx.send_viewport_cmd(ViewportCommand::Visible(true));
@@ -367,6 +380,15 @@ impl EditorApp {
             ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(ViewportCommand::Focus);
             window::focus(self.hwnd);
+        }
+    }
+
+    /// The window is hidden but was shown invisibly to run this frame
+    /// (`window::show_ghost`): hide it again, and restore the placement when it is
+    /// really shown.
+    fn pumped_hidden(&mut self) {
+        if !self.visible {
+            self.hide_frames = self.hide_frames.max(2);
         }
     }
 
@@ -1620,7 +1642,8 @@ impl EditorApp {
             return;
         }
         let tool = self.draw_tool();
-        if tool.is_none() && !self.cmd_state.has_objects {
+        let idle_select = tool == Some(crate::draw::Tool::Select);
+        if (tool.is_none() || idle_select) && !self.cmd_state.has_objects {
             return;
         }
         let pal = self.pal;
@@ -1705,7 +1728,15 @@ impl EditorApp {
                     let source = d.image.clone();
                     self.applying = Some(doc);
                     let apply: super::effects::ApplyFn = Arc::new(move |img, _, _| run(img));
-                    self.jobs.effect(doc, name, source, EffectTarget::Whole, apply, Default::default(), background_color());
+                    self.jobs.effect(
+                        doc,
+                        name,
+                        source,
+                        EffectTarget::Whole,
+                        apply,
+                        Default::default(),
+                        background_color(),
+                    );
                 }
             }
         }
@@ -1736,6 +1767,11 @@ impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.bench_presented();
         self.drain_messages(ctx);
+        if self.hide_frames > 0 && !self.visible {
+            self.hide_frames -= 1;
+            window::hide(self.hwnd);
+            ctx.request_repaint();
+        }
         self.poll_jobs(ctx);
         self.refresh_registry();
         self.compute_cmd_state();

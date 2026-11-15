@@ -118,7 +118,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
 
     // ---- input
     let pan_tool = *cx.tool == ToolId::Pan;
-    let handles_on = cx.external.is_none() && !matches!(cx.tool, ToolId::External(_)) && doc.floating.is_none() && !doc.busy();
+    let handles_on =
+        cx.external.is_none() && !matches!(cx.tool, ToolId::External(_)) && doc.floating.is_none() && !doc.busy();
     let hovered_edge = if handles_on && !st.is_dragging() { pointer.and_then(|p| edge_at(img_rect, p)) } else { None };
     let mut external = cx.external;
     handle_input(

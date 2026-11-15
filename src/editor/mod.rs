@@ -355,6 +355,8 @@ fn open_settings_tab(tab: Option<crate::settings_ui::Tab>) {
         START_HIDDEN.store(true, Ordering::Release);
     }
     send(EditorMsg::OpenSettings(tab), false);
+    // A hidden editor window runs no frames: pump one off-screen.
+    window::show_ghost(editor_hwnd());
 }
 
 /// Tools ▸ Combine Images from outside the editor (tray, toolbar).
@@ -384,6 +386,7 @@ pub fn open_video_editor(path: Option<PathBuf>) {
         START_HIDDEN.store(true, Ordering::Release);
     }
     send(EditorMsg::OpenVideo(path), false);
+    window::show_ghost(editor_hwnd());
 }
 
 /// Open files from disk in tabs.

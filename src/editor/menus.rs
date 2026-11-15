@@ -129,7 +129,9 @@ pub fn build_registry(
     ] {
         add(Command::new(id, t("draw-nudge"), K::Edit, Action::Nudge(dx, dy)).key(key).when(c::has_objects).hidden());
     }
-    add(Command::new("draw.next_tool", t("draw-next-tool"), K::Tools, Action::CycleTool(1)).key("Tab").when(c::has_doc));
+    add(Command::new("draw.next_tool", t("draw-next-tool"), K::Tools, Action::CycleTool(1))
+        .key("Tab")
+        .when(c::has_doc));
     add(Command::new("draw.prev_tool", t("draw-prev-tool"), K::Tools, Action::CycleTool(-1))
         .key("Shift+Tab")
         .when(c::has_doc));
@@ -166,6 +168,7 @@ pub fn build_registry(
         )
         .when(c::has_doc);
         cmd.shortcut = tool.shortcut().and_then(c::Shortcut::parse);
+        cmd.icon = tool.icon();
         add(cmd);
     }
 
@@ -824,9 +827,11 @@ impl EditorApp {
                         );
                         ui.label(RichText::new(hist).color(muted));
                         dot(ui);
-                        match &d.path {
-                            Some(p) => ui.label(RichText::new(p.display().to_string()).color(muted)),
-                            None => ui.label(RichText::new(t("editor-unsaved")).color(muted).italics()),
+                        match (&d.path, &d.project) {
+                            (Some(p), _) | (None, Some(p)) => {
+                                ui.label(RichText::new(p.display().to_string()).color(muted))
+                            }
+                            (None, None) => ui.label(RichText::new(t("editor-unsaved")).color(muted).italics()),
                         };
                     }
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

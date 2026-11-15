@@ -63,7 +63,7 @@ pub trait CanvasTool: Send {
     fn id(&self) -> &str;
     fn label(&self) -> String;
     /// A single glyph shown on the toolbar.
-    fn icon(&self) -> &str;
+    fn icon(&self) -> &'static str;
     /// Shortcut text, e.g. `"A"` or `"Ctrl+Shift+A"` (parsed like menu shortcuts).
     fn shortcut(&self) -> Option<&str> {
         None

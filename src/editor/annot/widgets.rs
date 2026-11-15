@@ -187,7 +187,13 @@ impl Fonts {
 
     /// The family name rendered in its own font (DirectWrite), cached. `budget` limits
     /// how many new previews are rendered this frame.
-    pub fn preview(&mut self, ctx: &egui::Context, family: &str, dark: bool, budget: &mut u32) -> Option<TextureHandle> {
+    pub fn preview(
+        &mut self,
+        ctx: &egui::Context,
+        family: &str,
+        dark: bool,
+        budget: &mut u32,
+    ) -> Option<TextureHandle> {
         let key = (family.to_string(), dark);
         if let Some(t) = self.previews.get(&key) {
             return Some(t.clone());
@@ -196,7 +202,13 @@ impl Fonts {
             return None;
         }
         *budget -= 1;
-        let img = render_label(family, family, 15.0, if dark { Color::rgb(235, 236, 240) } else { Color::rgb(30, 32, 38) }, ctx.pixels_per_point())?;
+        let img = render_label(
+            family,
+            family,
+            15.0,
+            if dark { Color::rgb(235, 236, 240) } else { Color::rgb(30, 32, 38) },
+            ctx.pixels_per_point(),
+        )?;
         let ci = tile_to_color_image(&img, TileRect { x: 0, y: 0, w: img.width, h: img.height });
         let tex = ctx.load_texture(format!("font-{family}"), ci, image_options());
         self.previews.insert(key, tex.clone());
@@ -261,8 +273,11 @@ pub fn dash_preview(ui: &mut egui::Ui, d: Dash, color: Color32) -> egui::Respons
 pub fn head_preview(ui: &mut egui::Ui, h: ArrowHead, at_end: bool, color: Color32) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 14.0), Sense::hover());
     let y = r.center().y;
-    let (tail, tip) =
-        if at_end { (pos2(r.left() + 2.0, y), pos2(r.right() - 3.0, y)) } else { (pos2(r.right() - 2.0, y), pos2(r.left() + 3.0, y)) };
+    let (tail, tip) = if at_end {
+        (pos2(r.left() + 2.0, y), pos2(r.right() - 3.0, y))
+    } else {
+        (pos2(r.right() - 2.0, y), pos2(r.left() + 3.0, y))
+    };
     let st = Stroke::new(2.0_f32, color);
     ui.painter().line_segment([tail, tip], st);
     let dir = if at_end { 1.0 } else { -1.0 };
@@ -334,7 +349,11 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
         let d = (tip - from).normalized();
         let n = vec2(-d.y, d.x);
         let k = size * s / 20.0;
-        p.add(egui::Shape::convex_polygon(vec![tip, tip - d * k + n * k * 0.55, tip - d * k - n * k * 0.55], c, Stroke::NONE));
+        p.add(egui::Shape::convex_polygon(
+            vec![tip, tip - d * k + n * k * 0.55, tip - d * k - n * k * 0.55],
+            c,
+            Stroke::NONE,
+        ));
     };
     let text = |pos: Pos2, txt: &str, size: f32| {
         p.text(pos, egui::Align2::CENTER_CENTER, txt, egui::FontId::proportional(size * s / 20.0), c);
@@ -342,7 +361,15 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
     match tool {
         Tool::Select => {
             p.add(egui::Shape::convex_polygon(
-                vec![q(5.0, 3.0), q(15.0, 11.5), q(10.5, 12.0), q(13.0, 17.0), q(11.0, 18.0), q(8.5, 13.0), q(5.0, 16.0)],
+                vec![
+                    q(5.0, 3.0),
+                    q(15.0, 11.5),
+                    q(10.5, 12.0),
+                    q(13.0, 17.0),
+                    q(11.0, 18.0),
+                    q(8.5, 13.0),
+                    q(5.0, 16.0),
+                ],
                 c,
                 Stroke::NONE,
             ));
@@ -388,11 +415,16 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
             poly(pts, true);
         }
         Tool::Polygon => poly(vec![q(10.0, 3.0), q(17.0, 8.5), q(14.5, 16.5), q(5.5, 16.5), q(3.0, 8.5)], true),
-        Tool::Bracket => {
-            poly(vec![q(12.0, 3.0), q(9.5, 3.5), q(9.5, 8.5), q(7.0, 10.0), q(9.5, 11.5), q(9.5, 16.5), q(12.0, 17.0)], false)
-        }
+        Tool::Bracket => poly(
+            vec![q(12.0, 3.0), q(9.5, 3.5), q(9.5, 8.5), q(7.0, 10.0), q(9.5, 11.5), q(9.5, 16.5), q(12.0, 17.0)],
+            false,
+        ),
         Tool::Highlighter => {
-            p.rect_filled(Rect::from_min_max(q(2.5, 7.0), q(17.5, 13.0)), 2.0, Color32::from_rgba_unmultiplied(255, 221, 0, 170));
+            p.rect_filled(
+                Rect::from_min_max(q(2.5, 7.0), q(17.5, 13.0)),
+                2.0,
+                Color32::from_rgba_unmultiplied(255, 221, 0, 170),
+            );
             p.line_segment([q(4.0, 10.0), q(16.0, 10.0)], thin);
         }
         Tool::LineHighlighter => {
@@ -421,7 +453,15 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
         }
         Tool::Sticker => {
             p.add(egui::Shape::convex_polygon(
-                vec![q(3.0, 8.0), q(11.0, 8.0), q(11.0, 4.0), q(17.5, 10.0), q(11.0, 16.0), q(11.0, 12.0), q(3.0, 12.0)],
+                vec![
+                    q(3.0, 8.0),
+                    q(11.0, 8.0),
+                    q(11.0, 4.0),
+                    q(17.5, 10.0),
+                    q(11.0, 16.0),
+                    q(11.0, 12.0),
+                    q(3.0, 12.0),
+                ],
                 c.gamma_multiply(0.35),
                 st,
             ));
@@ -433,7 +473,15 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
         }
         Tool::Cursor => {
             p.add(egui::Shape::convex_polygon(
-                vec![q(6.0, 2.5), q(6.0, 15.5), q(9.0, 12.5), q(11.5, 17.5), q(13.5, 16.5), q(11.0, 11.5), q(15.0, 11.5)],
+                vec![
+                    q(6.0, 2.5),
+                    q(6.0, 15.5),
+                    q(9.0, 12.5),
+                    q(11.5, 17.5),
+                    q(13.5, 16.5),
+                    q(11.0, 11.5),
+                    q(15.0, 11.5),
+                ],
                 c.gamma_multiply(0.25),
                 st,
             ));
@@ -454,7 +502,11 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
             }
         }
         Tool::Eraser => {
-            p.add(egui::Shape::convex_polygon(vec![q(3.0, 12.0), q(10.0, 5.0), q(17.0, 12.0), q(12.0, 17.0), q(8.0, 17.0)], c.gamma_multiply(0.3), st));
+            p.add(egui::Shape::convex_polygon(
+                vec![q(3.0, 12.0), q(10.0, 5.0), q(17.0, 12.0), q(12.0, 17.0), q(8.0, 17.0)],
+                c.gamma_multiply(0.3),
+                st,
+            ));
             line(q(6.5, 8.5), q(13.5, 15.5));
         }
         Tool::Fill => {

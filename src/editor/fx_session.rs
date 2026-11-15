@@ -41,8 +41,9 @@ fn label(key: &str) -> String {
 /// Menu entries for the interactive effects (their apply is never called directly).
 pub fn install(r: &mut EffectRegistry) {
     let mut add = |id: &'static str, key: &str, menu, group, dialog: bool| {
-        let mut d = EffectDef::new(id, label(key), menu, group, |img: &Image, _: &ParamValues, _: &EffectCtx| img.clone())
-            .whole_image();
+        let mut d =
+            EffectDef::new(id, label(key), menu, group, |img: &Image, _: &ParamValues, _: &EffectCtx| img.clone())
+                .whole_image();
         if dialog {
             // An empty schema: the menu shows an ellipsis.
             d.params = Some(Vec::new());
@@ -203,7 +204,8 @@ impl FxSession {
     pub fn new(ctx: &egui::Context, kind: FxKind, doc: &Document) -> Self {
         let (w, h) = (doc.image.width, doc.image.height);
         let sel = doc.selection.as_ref().map(|s| s.bounds);
-        let spot_rect = sel.unwrap_or(Rect::new(w as i32 / 4, h as i32 / 4, (w as i32 / 2).max(1), (h as i32 / 2).max(1)));
+        let spot_rect =
+            sel.unwrap_or(Rect::new(w as i32 / 4, h as i32 / 4, (w as i32 / 2).max(1), (h as i32 / 2).max(1)));
         let mut strip = StripParams { position: h / 3, size: (h / 10).max(1), ..Default::default() };
         if let Some(r) = sel {
             strip.position = r.y.max(0) as u32;
@@ -368,7 +370,11 @@ impl FxSession {
                         {
                             out = self.apply();
                         }
-                        if ui.add(egui::Button::new(t("editor-cancel")).min_size(vec2(84.0, 28.0))).on_hover_text("Esc").clicked() {
+                        if ui
+                            .add(egui::Button::new(t("editor-cancel")).min_size(vec2(84.0, 28.0)))
+                            .on_hover_text("Esc")
+                            .clicked()
+                        {
                             out = SessionOutcome::Cancel;
                         }
                     });
@@ -405,8 +411,17 @@ impl FxSession {
                     let c = self.tp.color;
                     let (r, _) = ui.allocate_exact_size(vec2(36.0, 20.0), egui::Sense::hover());
                     ui.painter().rect_filled(r, 4.0, Color32::from_rgb(c.r, c.g, c.b));
-                    ui.painter().rect_stroke(r, 4.0, Stroke::new(1.0_f32, ui.visuals().weak_text_color()), egui::StrokeKind::Inside);
-                    let txt = if self.tp_picked { format!("#{:02X}{:02X}{:02X}", c.r, c.g, c.b) } else { t("fx-transparent-pick") };
+                    ui.painter().rect_stroke(
+                        r,
+                        4.0,
+                        Stroke::new(1.0_f32, ui.visuals().weak_text_color()),
+                        egui::StrokeKind::Inside,
+                    );
+                    let txt = if self.tp_picked {
+                        format!("#{:02X}{:02X}{:02X}", c.r, c.g, c.b)
+                    } else {
+                        t("fx-transparent-pick")
+                    };
                     ui.label(txt);
                 });
                 ui.end_row();
@@ -424,8 +439,16 @@ impl FxSession {
                         TransparencyMode::Global => t("fx-transparent-global"),
                     })
                     .show_ui(ui, |ui| {
-                        ch |= ui.selectable_value(&mut self.tp.mode, TransparencyMode::Contiguous, t("fx-transparent-contiguous")).changed();
-                        ch |= ui.selectable_value(&mut self.tp.mode, TransparencyMode::Global, t("fx-transparent-global")).changed();
+                        ch |= ui
+                            .selectable_value(
+                                &mut self.tp.mode,
+                                TransparencyMode::Contiguous,
+                                t("fx-transparent-contiguous"),
+                            )
+                            .changed();
+                        ch |= ui
+                            .selectable_value(&mut self.tp.mode, TransparencyMode::Global, t("fx-transparent-global"))
+                            .changed();
                     });
                 ui.end_row();
                 ui.label("");
@@ -440,7 +463,8 @@ impl FxSession {
                 ui.label(t("fx-spotlight-shape"));
                 ui.horizontal(|ui| {
                     ch |= ui.selectable_value(&mut p.shape, SpotShape::Ellipse, t("fx-spotlight-ellipse")).changed();
-                    ch |= ui.selectable_value(&mut p.shape, SpotShape::Rectangle, t("fx-spotlight-rectangle")).changed();
+                    ch |=
+                        ui.selectable_value(&mut p.shape, SpotShape::Rectangle, t("fx-spotlight-rectangle")).changed();
                 });
                 ui.end_row();
                 ui.label(t("fx-spotlight-dim"));
@@ -451,7 +475,8 @@ impl FxSession {
                 ui.end_row();
                 ui.label(t("fx-param-color"));
                 let mut c = Color32::from_rgb(p.color.r, p.color.g, p.color.b);
-                if egui::color_picker::color_edit_button_srgba(ui, &mut c, egui::color_picker::Alpha::Opaque).changed() {
+                if egui::color_picker::color_edit_button_srgba(ui, &mut c, egui::color_picker::Alpha::Opaque).changed()
+                {
                     p.color = Color::rgb(c.r(), c.g(), c.b());
                     ch = true;
                 }
@@ -467,8 +492,16 @@ impl FxSession {
                 ui.label(t("fx-strip-orientation"));
                 ui.horizontal(|ui| {
                     let before = self.strip.orientation;
-                    ui.selectable_value(&mut self.strip.orientation, Orientation::Horizontal, t("fx-orientation-horizontal"));
-                    ui.selectable_value(&mut self.strip.orientation, Orientation::Vertical, t("fx-orientation-vertical"));
+                    ui.selectable_value(
+                        &mut self.strip.orientation,
+                        Orientation::Horizontal,
+                        t("fx-orientation-horizontal"),
+                    );
+                    ui.selectable_value(
+                        &mut self.strip.orientation,
+                        Orientation::Vertical,
+                        t("fx-orientation-vertical"),
+                    );
                     if before != self.strip.orientation {
                         self.strip_set = false;
                         ch = true;
@@ -480,10 +513,13 @@ impl FxSession {
                     Orientation::Vertical => self.size.0,
                 };
                 ui.label(t("fx-strip-position"));
-                ch |= ui.add(egui::DragValue::new(&mut self.strip.position).range(0..=max.saturating_sub(1)).suffix(" px")).changed();
+                ch |= ui
+                    .add(egui::DragValue::new(&mut self.strip.position).range(0..=max.saturating_sub(1)).suffix(" px"))
+                    .changed();
                 ui.end_row();
                 ui.label(t("fx-strip-size"));
-                if ui.add(egui::DragValue::new(&mut self.strip.size).range(1..=max.max(1) * 2).suffix(" px")).changed() {
+                if ui.add(egui::DragValue::new(&mut self.strip.size).range(1..=max.max(1) * 2).suffix(" px")).changed()
+                {
                     self.strip_set = true;
                     ch = true;
                 }
@@ -492,7 +528,9 @@ impl FxSession {
                     ui.label(t("fx-strip-color"));
                     let c = self.strip.color;
                     let mut cc = Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a);
-                    if egui::color_picker::color_edit_button_srgba(ui, &mut cc, egui::color_picker::Alpha::OnlyBlend).changed() {
+                    if egui::color_picker::color_edit_button_srgba(ui, &mut cc, egui::color_picker::Alpha::OnlyBlend)
+                        .changed()
+                    {
                         let [r, g, b, a] = cc.to_srgba_unmultiplied();
                         self.strip.color = Color::rgba(r, g, b, a);
                     }
@@ -503,7 +541,8 @@ impl FxSession {
                 ui.label(t("fx-watermark-image"));
                 ui.horizontal(|ui| {
                     if ui.button(t("editor-browse")).clicked() {
-                        let files = super::dialogs::open_files(hwnd, None, &t("editor-filter-images"), &t("editor-filter-all"));
+                        let files =
+                            super::dialogs::open_files(hwnd, None, &t("editor-filter-images"), &t("editor-filter-all"));
                         if let Some(p) = files.into_iter().next() {
                             let (tx, rx) = channel();
                             let path = p.clone();
@@ -570,7 +609,12 @@ impl FxSession {
                     let [x, y, w, h] = self.mark_rect;
                     let op = (self.mark_opacity as u32 * 255 / 100) as u8;
                     Arc::new(move |img| {
-                        let scaled = effects::resize_to(&mark, w.round().max(1.0) as u32, h.round().max(1.0) as u32, effects::ResampleFilter::Lanczos3);
+                        let scaled = effects::resize_to(
+                            &mark,
+                            w.round().max(1.0) as u32,
+                            h.round().max(1.0) as u32,
+                            effects::ResampleFilter::Lanczos3,
+                        );
                         let mut out = img.clone();
                         effects::composite(&mut out, &scaled, x.round() as i32, y.round() as i32, op);
                         out
@@ -589,7 +633,7 @@ impl CanvasTool for FxSession {
     fn label(&self) -> String {
         label(self.kind.title_key())
     }
-    fn icon(&self) -> &str {
+    fn icon(&self) -> &'static str {
         "✨"
     }
     fn cursor(&self) -> CursorIcon {
@@ -721,7 +765,12 @@ impl CanvasTool for FxSession {
                     painter.rect_stroke(r, 0.0, accent, egui::StrokeKind::Outside);
                     let c = r.right_bottom();
                     painter.rect_filled(egui::Rect::from_center_size(c, vec2(9.0, 9.0)), 1.5, Color32::WHITE);
-                    painter.rect_stroke(egui::Rect::from_center_size(c, vec2(9.0, 9.0)), 1.5, accent, egui::StrokeKind::Inside);
+                    painter.rect_stroke(
+                        egui::Rect::from_center_size(c, vec2(9.0, 9.0)),
+                        1.5,
+                        accent,
+                        egui::StrokeKind::Inside,
+                    );
                 }
             }
             _ => {}
@@ -764,8 +813,8 @@ impl CanvasTool for CloneTool {
     fn label(&self) -> String {
         t("fx-clone-tool")
     }
-    fn icon(&self) -> &str {
-        "⎘"
+    fn icon(&self) -> &'static str {
+        "✏"
     }
     fn cursor(&self) -> CursorIcon {
         CursorIcon::None

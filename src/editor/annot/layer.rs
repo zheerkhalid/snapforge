@@ -222,11 +222,7 @@ pub fn layer_mut(doc: &mut super::super::document::Document) -> Option<&mut Draw
 
 /// Apply `f` to the objects and record one undo step called `name` in both histories.
 /// Returns true if anything changed.
-pub fn edit(
-    doc: &mut super::super::document::Document,
-    name: &str,
-    f: impl FnOnce(&mut Vec<Object>) -> bool,
-) -> bool {
+pub fn edit(doc: &mut super::super::document::Document, name: &str, f: impl FnOnce(&mut Vec<Object>) -> bool) -> bool {
     let Some(l) = layer_mut(doc) else { return false };
     let before = l.doc.objects.clone();
     if !f(l.objects_mut()) {
