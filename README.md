@@ -7,13 +7,13 @@
 ### Capture, annotate and record your screen. Fast, native, and free.
 
 A lightweight Windows screen capture, annotation and recording tool written in **Rust**.
-It ships as a single 8.6 MB EXE with no runtimes, no account, no cloud and no telemetry.
+It ships as a single 11.5 MB EXE with no runtimes, no account, no cloud and no telemetry.
 
 <p>
   <img alt="Platform" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows11&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-B7410E?style=for-the-badge&logo=rust&logoColor=white" />
   <img alt="License" src="https://img.shields.io/badge/License-MIT-7B3FE4?style=for-the-badge" />
-  <img alt="EXE size" src="https://img.shields.io/badge/EXE-8.6%20MB-2EA043?style=for-the-badge" />
+  <img alt="EXE size" src="https://img.shields.io/badge/EXE-11.5%20MB-2EA043?style=for-the-badge" />
 </p>
 
 <p>
@@ -43,7 +43,7 @@ It ships as a single 8.6 MB EXE with no runtimes, no account, no cloud and no te
 <td width="33%" valign="top">
 
 ### ⚡ Fast
-SnapForge is ready in the tray about **0.2 s** after launch and uses **17 MB** of RAM while idle. A hotkey brings up the capture overlay in **33 ms**. The editor is created once, then hidden and reused, so after the first time it opens instantly.
+SnapForge is ready in the tray about **0.2 s** after launch and uses **17 MB** of RAM while idle. A hotkey brings up the capture overlay in **36 ms**. The editor is created once, then hidden and reused, so after the first time it opens instantly.
 
 </td>
 <td width="33%" valign="top">
@@ -103,6 +103,10 @@ One self-contained `SnapForge.exe` with a static CRT. It needs no .NET, no VC++ 
 <td width="50%" align="center"><b>Pin to screen in draw mode</b><br><img src="docs/screenshots/pin.png" alt="Pinned image" /></td>
 <td width="50%" align="center"><b>Screen ruler</b><br><img src="docs/screenshots/tool-ruler.png" alt="Ruler" /></td>
 </tr>
+<tr>
+<td width="50%" align="center"><b>Convert to MP4</b><br><img src="docs/screenshots/convert.png" alt="Convert to MP4" width="360" /></td>
+<td width="50%" align="center"><b>Magnifier</b><br><img src="docs/screenshots/tool-magnifier.png" alt="Magnifier" width="300" /></td>
+</tr>
 </table>
 
 ## 🚀 Performance
@@ -111,13 +115,13 @@ These numbers were measured with `SnapForge.exe --bench` on a release build (i7-
 
 | Budget | Target | Measured |
 |---|---|---|
-| Cold start → tray ready | < 300 ms | ✅ **210 ms** |
+| Cold start → tray ready | < 300 ms | ✅ **184 ms** |
 | Idle RAM in the tray | < 30 MB | ✅ **17 MB** working set |
-| Hotkey → capture overlay visible | < 80 ms | ✅ **33 ms** |
-| Capture → editor showing the image | < 150 ms | ✅ **18 ms** (first open 280 ms, which includes OpenGL start-up) |
-| Portable EXE size | < 20 MB | ✅ **8.6 MB** |
-| 1080p60 recording, hardware encoder | < 10 % CPU, no drops | ✅ **~1.4 % of total CPU, 0 dropped frames** |
-| 20-screen scrolling stitch | < 5 s | ✅ **83 ms** of stitching (plus scroll settle time) |
+| Hotkey → capture overlay visible | < 80 ms | ✅ **36 ms** |
+| Capture → editor showing the image | < 150 ms | ✅ **31 ms** (first open 327 ms, which includes OpenGL start-up) |
+| Portable EXE size | < 20 MB | ✅ **11.5 MB** |
+| 1080p60 recording, hardware encoder | < 10 % CPU, no drops | ✅ **1.3 % of total CPU, 0 of 330 frames dropped** |
+| 20-screen scrolling stitch | < 5 s | ✅ **90 ms** of stitching (plus scroll settle time) |
 | A/V sync after 10 s of recording | < 40 ms drift | ✅ **14.7 ms** |
 
 ## ⌨️ Default hotkeys

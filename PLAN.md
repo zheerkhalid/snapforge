@@ -49,7 +49,7 @@ docs/USAGE.md
 | gif | 0.14 | Animated GIF export (already in the tree via `image`) | 0 |
 | windows-core | 0.58 | `#[implement]` for COM callbacks (already in the tree) | 0 |
 
-Not needed in the end: `mp3lame-encoder` (Windows' built-in MP3 encoder MFT is used), `gifski` (GPL licensing and about 1 MB), and `cosmic-text` (DirectWrite renders text instead, adding nothing to the binary). The final release EXE is **8.6 MB**.
+Not needed in the end: `mp3lame-encoder` (Windows' built-in MP3 encoder MFT is used), `gifski` (GPL licensing and about 1 MB), and `cosmic-text` (DirectWrite renders text instead, adding nothing to the binary). The final release EXE is **11.5 MB**.
 
 ## Milestones
 
