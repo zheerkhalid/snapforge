@@ -263,7 +263,7 @@ impl EffectDialog {
         if let Some(tip) = &p.tooltip {
             label.on_hover_text(tip);
         }
-        let cur = self.values.0.get(p.id).copied().unwrap_or_else(|| p.kind.default_value());
+        let cur = self.values.0.get(p.id).cloned().unwrap_or_else(|| p.kind.default_value());
         let mut changed = false;
         let new = match (&p.kind, cur) {
             (ParamKind::Float { min, max, step, decimals, suffix, logarithmic, .. }, ParamValue::Float(mut v)) => {
@@ -298,6 +298,15 @@ impl EffectDialog {
                     }
                 });
                 ParamValue::Choice(v)
+            }
+            (ParamKind::Text { multiline, .. }, ParamValue::Text(mut v)) => {
+                let edit = if *multiline {
+                    egui::TextEdit::multiline(&mut v).desired_rows(3).desired_width(200.0)
+                } else {
+                    egui::TextEdit::singleline(&mut v).desired_width(200.0)
+                };
+                changed = ui.add(edit).changed();
+                ParamValue::Text(v)
             }
             (kind, _) => kind.default_value(),
         };

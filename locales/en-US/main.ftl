@@ -948,3 +948,7 @@ editor-effect-no-params = This effect has no options.
 editor-effect-placeholder = This effect is not available in this build yet.
 editor-effect-unavailable = { $name } is not available in this build yet.
 editor-effect-nochange = { $name } made no change.
+
+## Editor effects (integration)
+fx-round-corners = Round Corners…
+fx-size-zero-tip = 0 keeps the current size

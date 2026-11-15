@@ -42,6 +42,7 @@ mod document;
 mod effects;
 mod ext;
 mod fileops;
+mod fx_install;
 mod history;
 mod jobs;
 mod menus;
