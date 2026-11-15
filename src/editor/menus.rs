@@ -299,7 +299,7 @@ impl EditorApp {
         self.item(ui, "file.open");
         ui.menu_button(t("editor-recent"), |ui| self.recent_menu(ui));
         ui.separator();
-        for id in ["file.save", "file.save_as", "file.save_all", "file.save_sequence"] {
+        for id in ["file.save", "file.save_as", "file.save_all", "file.save_sequence", "file.save_project"] {
             self.item(ui, id);
         }
         ui.separator();
@@ -445,13 +445,28 @@ impl EditorApp {
         for id in ["tool.pan", "tool.rect", "tool.free"] {
             self.item(ui, id);
         }
-        let ext: Vec<String> = self.ext_tools.iter().map(|t| format!("tool.{}", t.id())).collect();
-        if !ext.is_empty() {
+        let ext: Vec<String> =
+            self.ext_tools.iter().filter(|t| t.on_ribbon()).map(|t| format!("tool.{}", t.id())).collect();
+        let draw: Vec<String> =
+            self.ext_tools.iter().filter(|t| !t.on_ribbon()).map(|t| format!("tool.{}", t.id())).collect();
+        if !ext.is_empty() || !draw.is_empty() {
             ui.separator();
             for id in ext {
                 self.item(ui, &id);
             }
+            if !draw.is_empty() {
+                ui.menu_button(t("editor-menu-draw"), |ui| {
+                    ui.set_min_width(240.0);
+                    for id in draw {
+                        self.item(ui, &id);
+                    }
+                    ui.separator();
+                    self.item(ui, "draw.next_tool");
+                    self.item(ui, "draw.prev_tool");
+                });
+            }
         }
+        self.item(ui, "tools.settings");
         ui.separator();
         for id in ["tools.combine", "tools.pdf", "tools.batch_print"] {
             self.item(ui, id);
@@ -481,6 +496,8 @@ impl EditorApp {
             ui.close_menu();
         }
         self.item(ui, "view.new_workspace");
+        ui.separator();
+        self.item(ui, "view.draw_palette");
     }
 
     // ------------------------------------------------------------------ ribbon
@@ -488,14 +505,14 @@ impl EditorApp {
     pub(super) fn ribbon(&mut self, ctx: &egui::Context) {
         let frame = egui::Frame::new().fill(self.pal.bar).inner_margin(Margin { left: 8, right: 8, top: 2, bottom: 4 });
         egui::TopBottomPanel::top("ribbon").frame(frame).show_separator_line(false).show(ctx, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
                 ui.spacing_mut().item_spacing.x = 2.0;
                 self.group(ui, "editor-group-file", &["file.open", "file.save", "file.save_all"]);
                 self.group(ui, "editor-group-history", &["edit.undo", "edit.redo"]);
                 self.group(ui, "editor-group-clipboard", &["edit.copy", "edit.cut", "edit.paste"]);
                 let mut tools = vec!["tool.pan".to_string(), "tool.rect".into(), "tool.free".into()];
-                tools.extend(self.ext_tools.iter().map(|t| format!("tool.{}", t.id())));
+                tools.extend(self.ext_tools.iter().filter(|t| t.on_ribbon()).map(|t| format!("tool.{}", t.id())));
                 let tools: Vec<&str> = tools.iter().map(String::as_str).collect();
                 self.group(ui, "editor-group-tools", &tools);
                 self.group(ui, "editor-group-selection", &["edit.crop", "edit.new_tab", "edit.pin"]);
@@ -503,13 +520,13 @@ impl EditorApp {
                 self.active_tool_options(ui);
                 let cont = self.tabs.active().and_then(|d| d.continue_to);
                 if let Some(dest) = cont {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let label = tf("editor-continue", &[("dest", &t(dest.label_key()))]);
-                        let btn = style::primary_button(format!("{label}  ➡")).min_size(vec2(0.0, 30.0));
-                        if ui.add(btn).clicked() {
-                            self.actions.push(Action::Continue);
-                        }
-                    });
+                    // Inline (not right-aligned) so it wraps with the groups on narrow windows.
+                    let label = tf("editor-continue", &[("dest", &t(dest.label_key()))]);
+                    let btn = style::primary_button(format!("{label}  ➡")).min_size(vec2(0.0, 30.0));
+                    ui.add_space(8.0);
+                    if ui.add(btn).clicked() {
+                        self.actions.push(Action::Continue);
+                    }
                 }
             });
         });

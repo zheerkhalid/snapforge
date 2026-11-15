@@ -252,6 +252,7 @@ impl FxSession {
             return;
         }
         self.changed = false;
+        let wm_params = self.mark.as_ref().map(|m| self.watermark_params(m));
         let Some(pv) = self.preview.as_mut() else { return };
         match self.kind {
             FxKind::Transparency if self.tp_picked => {
@@ -284,7 +285,7 @@ impl FxSession {
             }
             FxKind::Watermark if self.mark_tile => {
                 if let Some(mark) = self.mark.clone() {
-                    let params = self.watermark_params(&mark);
+                    let Some(params) = wm_params else { return };
                     pv.request(Box::new(move |img, s| {
                         let mut p = params;
                         p.scale *= s;

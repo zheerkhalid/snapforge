@@ -7,7 +7,6 @@
 //! colour count, clone stamp) need the canvas and are registered elsewhere.
 
 // Wired up by the editor's registration (`register_effects(fx_install::install)`).
-#![cfg_attr(not(test), allow(dead_code))]
 
 use super::effects::{EffectCtx, EffectDef, EffectRegistry, MenuSlot, ParamDef, ParamKind, ParamValues};
 #[cfg(test)]

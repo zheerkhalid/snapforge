@@ -381,13 +381,13 @@ fn execute(cmd: AppCommand) {
         AppCommand::ShowToolbar(v) => toolbar::show(v),
         AppCommand::ToggleToolbar => toolbar::toggle(),
         AppCommand::OpenEditor => editor::show(),
-        AppCommand::OpenSettings => open_settings_file(),
+        AppCommand::OpenSettings => editor::open_settings(),
         AppCommand::OpenOutputFolder => {
             let dir = settings::get().output_folder();
             let _ = std::fs::create_dir_all(&dir);
             win::shell_open(&dir.display().to_string());
         }
-        AppCommand::About => show_about(),
+        AppCommand::About => editor::open_about(),
         AppCommand::SettingsChanged => {
             for problem in hotkeys::reload() {
                 log::warn!("hotkeys: {problem}");
@@ -766,7 +766,11 @@ fn temp_path() -> PathBuf {
 fn deliver_to(image: Image, dest: Destination, explicit_path: Option<PathBuf>, exit_after: bool) {
     match dest {
         Destination::Editor | Destination::Draw => {
-            editor::open_image(image, capture_title(), None, None);
+            if dest == Destination::Draw {
+                editor::open_image_draw(image, capture_title());
+            } else {
+                editor::open_image(image, capture_title(), None, None);
+            }
             // A standalone CLI run that opens the editor keeps running in the tray.
             if exit_after {
                 with_state(|s| s.exit_after_output = false);
@@ -902,6 +906,8 @@ fn go_idle() {
 }
 
 /// Settings UI arrives in Phase 6; until then open the TOML file and watch for edits.
+// Superseded by the Settings window (editor::open_settings); kept for the settings-file watcher.
+#[allow(dead_code)]
 fn open_settings_file() {
     let p = settings::path();
     if !p.exists() {
@@ -947,6 +953,8 @@ fn settings_watch_tick() {
     }
 }
 
+// Superseded by Settings ▸ About (editor::open_about).
+#[allow(dead_code)]
 fn show_about() {
     let text = format!(
         "{} {}\n{}\n\n{}\nhttps://zheer.dev\n\nOpen the developer's website?",

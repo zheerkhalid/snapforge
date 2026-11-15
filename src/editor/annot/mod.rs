@@ -492,7 +492,7 @@ impl DrawState {
                         set_freehand(o, vec![a, b]);
                     } else if let Some(pts) = freehand_points(o) {
                         let min = 0.75 / input.map.scale.max(1e-4);
-                        if pts.last().is_none_or(|q| q.dist(p) >= min.min(1.0)) {
+                        if pts.last().map_or(true, |q| q.dist(p) >= min.min(1.0)) {
                             pts.push(p);
                         }
                     }

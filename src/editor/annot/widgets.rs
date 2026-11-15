@@ -206,8 +206,7 @@ impl Fonts {
 
 /// Render `text` in `family` at `pt` points with DirectWrite (through a draw text object).
 fn render_label(text: &str, family: &str, pt: f32, color: Color, scale: f32) -> Option<Image> {
-    let mut style = draw::Style::default();
-    style.width = 0.0;
+    let mut style = draw::Style { width: 0.0, ..Default::default() };
     style.font.family = family.to_string();
     style.font.size = pt;
     style.font.color = color;
@@ -321,7 +320,9 @@ pub fn tool_icon(p: &egui::Painter, r: Rect, tool: Tool, c: Color32) {
     let q = |x: f32, y: f32| -> Pos2 { o + vec2(x, y) * (s / 20.0) };
     let st = Stroke::new(1.6_f32, c);
     let thin = Stroke::new(1.2_f32, c);
-    let line = |a: Pos2, b: Pos2| p.line_segment([a, b], st);
+    let line = |a: Pos2, b: Pos2| {
+        p.line_segment([a, b], st);
+    };
     let poly = |pts: Vec<Pos2>, closed: bool| {
         if closed {
             p.add(egui::Shape::closed_line(pts, st));

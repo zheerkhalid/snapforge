@@ -55,6 +55,9 @@ pub struct DrawSettings {
     pub presets: Vec<Preset>,
     /// Offset applied when pasting or duplicating annotations, in pixels.
     pub paste_offset: f32,
+    /// When an annotated image is saved, also save an editable `.sfcap` project next to it
+    /// (or in `<settings>/autosave` if that folder is not writable).
+    pub autosave_project: bool,
 }
 
 impl Default for DrawSettings {
@@ -79,6 +82,7 @@ impl Default for DrawSettings {
             last_styles: BTreeMap::new(),
             presets: Vec::new(),
             paste_offset: 12.0,
+            autosave_project: true,
         }
     }
 }

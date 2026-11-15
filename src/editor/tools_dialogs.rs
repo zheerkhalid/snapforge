@@ -7,7 +7,6 @@
 //! dialogs.open(ToolKind::Combine, tools_context);   // from the ToolsHost / Tools menu
 //! for ev in dialogs.ui(ctx, hwnd) { /* NewTab → push a document, Toast → show it */ }
 //! ```
-#![allow(dead_code)]
 
 use super::effects::downscale_proxy;
 use super::ext::ToolsContext;
