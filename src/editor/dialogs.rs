@@ -17,8 +17,8 @@ use windows::Win32::System::Com::{
 use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
 use windows::Win32::UI::Shell::{
     FileOpenDialog, FileSaveDialog, IFileDialog, IFileOpenDialog, IFileSaveDialog, IShellItem,
-    SHCreateItemFromParsingName, FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_OVERWRITEPROMPT,
-    FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
+    SHCreateItemFromParsingName, FDAP_TOP, FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM,
+    FOS_OVERWRITEPROMPT, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
 };
 
 /// Every extension we can decode (for the open filter and drag & drop).
@@ -103,11 +103,80 @@ fn log_show_error(e: &windows::core::Error) {
     }
 }
 
+/// Add the SnapForge output folder to the dialog's navigation pane (a "custom place").
+fn add_output_place(dlg: &IFileDialog) {
+    let dir = crate::settings::get().output_folder();
+    if !dir.is_dir() {
+        return;
+    }
+    let w = wide(&dir.to_string_lossy());
+    // SAFETY: valid NUL-terminated path; the item is released when dropped.
+    unsafe {
+        if let Ok(item) = SHCreateItemFromParsingName::<_, _, IShellItem>(pcwstr(&w), None) {
+            let _ = dlg.AddPlace(&item, FDAP_TOP);
+        }
+    }
+}
+
+/// Open-dialog filters: all images, one per format, all files.
+pub fn open_filter_items(all_images: &str, all_files: &str) -> Vec<(String, String)> {
+    let pattern = OPEN_EXTENSIONS.iter().map(|e| format!("*.{e}")).collect::<Vec<_>>().join(";");
+    let mut items = vec![(all_images.to_string(), pattern)];
+    for f in ImageFormat::ALL {
+        let (n, p) = format_filter(f);
+        items.push((format!("{n} ({})", p.replace(';', ", ")), p.to_string()));
+    }
+    items.push(("ICO (*.ico)".into(), "*.ico".into()));
+    items.push((all_files.to_string(), "*.*".to_string()));
+    items
+}
+
+/// Folder picker. `None` when cancelled.
+pub fn pick_folder(owner: isize, folder: Option<&Path>) -> Option<PathBuf> {
+    ensure_com();
+    // SAFETY: standard COM usage; all pointers passed in outlive the calls.
+    unsafe {
+        let dlg: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let opts = dlg.GetOptions().unwrap_or_default();
+        let _ = dlg.SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        if let Ok(base) = dlg.cast::<IFileDialog>() {
+            set_folder(&base, folder);
+            add_output_place(&base);
+        }
+        if let Err(e) = dlg.Show(hwnd_from_isize(owner)) {
+            log_show_error(&e);
+            return None;
+        }
+        shell_item_path(&dlg.GetResult().ok()?)
+    }
+}
+
+/// Pick a program (.exe) for "Edit With".
+pub fn pick_program(owner: isize) -> Option<PathBuf> {
+    ensure_com();
+    let f = filters(&[("Programs (*.exe)".into(), "*.exe".into()), ("All files".into(), "*.*".into())]);
+    let pf = std::env::var_os("ProgramFiles").map(PathBuf::from);
+    // SAFETY: standard COM usage; all pointers passed in outlive the calls.
+    unsafe {
+        let dlg: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let opts = dlg.GetOptions().unwrap_or_default();
+        let _ = dlg.SetOptions(opts | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM);
+        let _ = dlg.SetFileTypes(&f.specs);
+        if let Ok(base) = dlg.cast::<IFileDialog>() {
+            set_folder(&base, pf.as_deref());
+        }
+        if let Err(e) = dlg.Show(hwnd_from_isize(owner)) {
+            log_show_error(&e);
+            return None;
+        }
+        shell_item_path(&dlg.GetResult().ok()?)
+    }
+}
+
 /// Multi-select open dialog. Returns an empty list when cancelled.
 pub fn open_files(owner: isize, folder: Option<&Path>, all_images: &str, all_files: &str) -> Vec<PathBuf> {
     ensure_com();
-    let pattern = OPEN_EXTENSIONS.iter().map(|e| format!("*.{e}")).collect::<Vec<_>>().join(";");
-    let f = filters(&[(all_images.to_string(), pattern), (all_files.to_string(), "*.*".to_string())]);
+    let f = filters(&open_filter_items(all_images, all_files));
     // SAFETY: standard COM usage; all pointers passed in outlive the calls.
     unsafe {
         let dlg: IFileOpenDialog = match CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) {
@@ -123,6 +192,7 @@ pub fn open_files(owner: isize, folder: Option<&Path>, all_images: &str, all_fil
         let _ = dlg.SetFileTypeIndex(1);
         if let Ok(base) = dlg.cast::<IFileDialog>() {
             set_folder(&base, folder);
+            add_output_place(&base);
         }
         if let Err(e) = dlg.Show(hwnd_from_isize(owner)) {
             log_show_error(&e);
@@ -171,6 +241,7 @@ pub fn save_file(
         let _ = dlg.SetFileName(PCWSTR(name.as_ptr()));
         if let Ok(base) = dlg.cast::<IFileDialog>() {
             set_folder(&base, folder);
+            add_output_place(&base);
         }
         if let Err(e) = dlg.Show(hwnd_from_isize(owner)) {
             log_show_error(&e);
@@ -201,6 +272,15 @@ mod tests {
             assert!(pat.split(';').any(|p| p == format!("*.{}", f.extension())), "{f:?}");
             assert!(OPEN_EXTENSIONS.contains(&f.extension()));
         }
+    }
+
+    #[test]
+    fn open_filters_list_every_format() {
+        let items = open_filter_items("All images", "All files");
+        assert_eq!(items.first().map(|i| i.0.as_str()), Some("All images"));
+        assert_eq!(items.last().map(|i| i.1.as_str()), Some("*.*"));
+        assert_eq!(items.len(), ImageFormat::ALL.len() + 3);
+        assert!(items[0].1.contains("*.webp"));
     }
 
     #[test]

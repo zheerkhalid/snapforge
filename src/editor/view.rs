@@ -9,6 +9,9 @@ pub const MIN_ZOOM: f32 = 0.01;
 /// 5000%.
 pub const MAX_ZOOM: f32 = 50.0;
 
+/// Zoom menu presets, in percent.
+pub const PRESETS: [u32; 17] = [1, 5, 10, 25, 33, 50, 67, 75, 100, 150, 200, 300, 400, 800, 1600, 3200, 5000];
+
 /// Preset steps for the zoom buttons / keyboard (+ / -).
 const STEPS: [f32; 25] = [
     0.01, 0.02, 0.03, 0.05, 0.0833, 0.125, 0.1667, 0.25, 0.3333, 0.5, 0.6667, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0,
@@ -165,6 +168,20 @@ impl ViewState {
         [img[0] * self.zoom, img[1] * self.zoom]
     }
 
+    /// Zoom so the image rectangle `r` ([x, y, w, h] in image px) fills ~90% of the
+    /// canvas, centred on it.
+    pub fn zoom_to_rect(&mut self, r: [f32; 4], img: [f32; 2], view: [f32; 2]) {
+        if r[2] <= 0.0 || r[3] <= 0.0 || view[0] <= 0.0 || view[1] <= 0.0 {
+            return;
+        }
+        let z = clamp_zoom((view[0] * 0.9 / r[2]).min(view[1] * 0.9 / r[3]));
+        self.zoom = z;
+        self.fit = FitMode::None;
+        let c = [r[0] + r[2] / 2.0, r[1] + r[3] / 2.0];
+        self.offset = [view[0] / 2.0 - c[0] * z, view[1] / 2.0 - c[1] * z];
+        self.clamp(img, view);
+    }
+
     /// Canvas physical px → image px.
     pub fn screen_to_image(&self, p: [f32; 2]) -> [f32; 2] {
         [(p[0] - self.offset[0]) / self.zoom, (p[1] - self.offset[1]) / self.zoom]
@@ -265,6 +282,22 @@ mod tests {
         assert_eq!(v.offset, [0.0, 0.0]);
         v.pan([-5000.0, -5000.0], img, VIEW);
         assert_eq!(v.offset, [VIEW[0] - 2000.0, VIEW[1] - 2000.0]);
+    }
+
+    #[test]
+    fn zoom_to_selection_centres_it() {
+        let img = [4000.0, 3000.0];
+        let mut v = ViewState::default();
+        v.layout(img, VIEW);
+        v.zoom_to_rect([1000.0, 1000.0, 80.0, 60.0], img, VIEW);
+        assert!(approx(v.zoom, 9.0));
+        let c = v.screen_to_image([VIEW[0] / 2.0, VIEW[1] / 2.0]);
+        assert!(approx(c[0], 1040.0) && approx(c[1], 1030.0));
+        // A 1×1 selection is limited to 5000%.
+        v.zoom_to_rect([0.0, 0.0, 1.0, 1.0], img, VIEW);
+        assert_eq!(v.zoom, MAX_ZOOM);
+        assert!(PRESETS.windows(2).all(|w| w[0] < w[1]));
+        assert_eq!((PRESETS[0], PRESETS[16]), (1, 5000));
     }
 
     #[test]
