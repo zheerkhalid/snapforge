@@ -6,20 +6,22 @@ use crate::settings::{CaptureMode, HotkeySettings};
 use eframe::egui::{Event, Key, Modifiers};
 
 /// The hotkey rows shown on the Hotkeys tab: (label key, field accessor index).
-pub const ROWS: usize = 8;
+pub const ROWS: usize = 8 + 9;
 
 /// Fluent key of a row's label.
 pub fn row_label_key(i: usize) -> &'static str {
     match CaptureMode::ALL.get(i) {
         Some(m) => m.label_key(),
-        None => "repeat-last",
+        None if i == 7 => "repeat-last",
+        None => HotkeySettings::default().extras().get(i.saturating_sub(8)).map(|e| e.0).unwrap_or("repeat-last"),
     }
 }
 
 pub fn row_text(h: &HotkeySettings, i: usize) -> &str {
     match CaptureMode::ALL.get(i) {
         Some(&m) => h.for_mode(m),
-        None => &h.repeat_last,
+        None if i == 7 => &h.repeat_last,
+        None => h.extras().get(i.saturating_sub(8)).map(|e| e.1.as_str()).unwrap_or(""),
     }
 }
 
@@ -32,7 +34,18 @@ pub fn row_text_mut(h: &mut HotkeySettings, i: usize) -> &mut String {
         Some(CaptureMode::FullScreen) => &mut h.full_screen,
         Some(CaptureMode::Scrolling) => &mut h.scrolling,
         Some(CaptureMode::FixedRegion) => &mut h.fixed_region,
-        None => &mut h.repeat_last,
+        None => match i {
+            8 => &mut h.record_region,
+            9 => &mut h.record_full_screen,
+            10 => &mut h.stop_recording,
+            11 => &mut h.pause_recording,
+            12 => &mut h.capture_text,
+            13 => &mut h.pin_capture,
+            14 => &mut h.color_picker,
+            15 => &mut h.magnifier,
+            16 => &mut h.ruler,
+            _ => &mut h.repeat_last,
+        },
     }
 }
 
@@ -206,6 +219,18 @@ pub fn row_has_warning(h: &HotkeySettings, i: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_row_reads_back_what_it_writes() {
+        let mut h = crate::settings::HotkeySettings::default();
+        for i in 0..super::ROWS {
+            *super::row_text_mut(&mut h, i) = format!("Ctrl+F{}", i + 1);
+        }
+        for i in 0..super::ROWS {
+            assert_eq!(super::row_text(&h, i), format!("Ctrl+F{}", i + 1), "row {i}");
+            assert!(!super::row_label_key(i).is_empty());
+        }
+    }
+
     use super::*;
 
     fn key(k: Key, m: Modifiers) -> Event {

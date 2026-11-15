@@ -38,6 +38,24 @@ pub struct Hotkey {
 pub enum Action {
     Capture(CaptureMode),
     RepeatLast,
+    /// Index into `HotkeySettings::extras()`.
+    Extra(u8),
+}
+
+fn extra_command(i: u8) -> Option<AppCommand> {
+    use crate::app::{RecordTarget, ScreenTool};
+    Some(match i {
+        0 => AppCommand::Record(RecordTarget::Region),
+        1 => AppCommand::Record(RecordTarget::FullScreen),
+        2 => AppCommand::StopRecording,
+        3 => AppCommand::TogglePauseRecording,
+        4 => AppCommand::CaptureText,
+        5 => AppCommand::PinCapture,
+        6 => AppCommand::ScreenTool(ScreenTool::ColorPicker),
+        7 => AppCommand::ScreenTool(ScreenTool::Magnifier),
+        8 => AppCommand::ScreenTool(ScreenTool::Ruler),
+        _ => return None,
+    })
 }
 
 impl Action {
@@ -45,6 +63,11 @@ impl Action {
         match self {
             Action::Capture(m) => app::post(AppCommand::Capture(m)),
             Action::RepeatLast => app::post(AppCommand::RepeatLast),
+            Action::Extra(i) => {
+                if let Some(c) = extra_command(i) {
+                    app::post(c);
+                }
+            }
         }
     }
 
@@ -52,6 +75,11 @@ impl Action {
         match self {
             Action::Capture(m) => i18n::t(m.label_key()),
             Action::RepeatLast => i18n::t("repeat-last"),
+            Action::Extra(i) => {
+                let s = settings::get();
+                let key = s.hotkeys.extras().get(i as usize).map(|e| e.0).unwrap_or("app-name");
+                i18n::t(key)
+            }
         }
     }
 }
@@ -78,6 +106,9 @@ pub fn display(text: &str) -> String {
 fn assignments(s: &HotkeySettings) -> Vec<(&str, Action)> {
     let mut v: Vec<(&str, Action)> = CaptureMode::ALL.iter().map(|&m| (s.for_mode(m), Action::Capture(m))).collect();
     v.push((s.repeat_last.as_str(), Action::RepeatLast));
+    for (i, (_, val)) in s.extras().iter().enumerate() {
+        v.push((val.as_str(), Action::Extra(i as u8)));
+    }
     v
 }
 

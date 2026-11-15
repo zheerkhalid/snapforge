@@ -3,7 +3,7 @@
 //! Menus are tracked with `TPM_RETURNCMD`, so the chosen id is dispatched right here,
 //! regardless of which window opened the menu.
 
-use crate::app::{self, AppCommand};
+use crate::app::{self, AppCommand, RecordTarget, ScreenTool, ToolWindow};
 use crate::common::win::{pcwstr, wide};
 use crate::i18n::{t, tf};
 use crate::settings::{self, CaptureMode, Destination};
@@ -32,6 +32,44 @@ const ID_SETTINGS: u32 = 404;
 const ID_AUTOSTART: u32 = 405;
 const ID_ABOUT: u32 = 406;
 const ID_EXIT: u32 = 407;
+const ID_EXTRA: u32 = 500; // + index in EXTRA
+
+/// Recorder and tool entries: (fluent key, command factory, submenu index 0=record 1=tools).
+/// (fluent key, command factory, submenu: 0 = record, 1 = tools)
+type ExtraItem = (&'static str, fn() -> AppCommand, u8);
+
+const EXTRA: &[ExtraItem] = &[
+    ("menu-record-fullscreen", || AppCommand::Record(RecordTarget::FullScreen), 0),
+    ("menu-record-window", || AppCommand::Record(RecordTarget::Window), 0),
+    ("menu-record-region", || AppCommand::Record(RecordTarget::Region), 0),
+    ("menu-record-fixed", || AppCommand::Record(RecordTarget::FixedRegion), 0),
+    ("menu-record-pause", || AppCommand::TogglePauseRecording, 0),
+    ("menu-record-stop", || AppCommand::StopRecording, 0),
+    ("menu-record-schedule", || AppCommand::OpenTool(ToolWindow::ScheduleRecording), 0),
+    ("menu-video-editor", || AppCommand::OpenVideoEditor(None), 0),
+    ("menu-convert-mp4", || AppCommand::OpenTool(ToolWindow::ConvertToMp4), 0),
+    ("menu-capture-text", || AppCommand::CaptureText, 1),
+    ("menu-pin-capture", || AppCommand::PinCapture, 1),
+    ("menu-pin-clipboard", || AppCommand::PinFromClipboard, 1),
+    ("menu-color-picker", || AppCommand::ScreenTool(ScreenTool::ColorPicker), 1),
+    ("menu-magnifier", || AppCommand::ScreenTool(ScreenTool::Magnifier), 1),
+    ("menu-crosshair", || AppCommand::ScreenTool(ScreenTool::Crosshair), 1),
+    ("menu-focus", || AppCommand::ScreenTool(ScreenTool::Focus), 1),
+    ("menu-ruler", || AppCommand::ScreenTool(ScreenTool::Ruler), 1),
+    ("menu-combine", || AppCommand::OpenTool(ToolWindow::CombineImages), 1),
+    ("menu-to-pdf", || AppCommand::OpenTool(ToolWindow::ImagesToPdf), 1),
+    ("menu-batch-print", || AppCommand::OpenTool(ToolWindow::BatchPrint), 1),
+];
+
+fn build_extra(group: u8) -> Option<Menu> {
+    let m = Menu::new()?;
+    for (i, (key, _, g)) in EXTRA.iter().enumerate() {
+        if *g == group {
+            m.item(ID_EXTRA + i as u32, &t(key), false);
+        }
+    }
+    Some(m)
+}
 
 /// First id free for callers that add their own items (e.g. the toolbar's context menu).
 pub const ID_USER: u32 = 1000;
@@ -193,6 +231,13 @@ pub fn build_full() -> Option<Menu> {
     let auto = settings::get().capture.auto_capture_enabled;
     m.item(ID_AUTO_CAPTURE, &t("auto-capture"), auto);
     m.separator();
+    if let Some(sub) = build_extra(0) {
+        m.submenu(sub, &t("menu-record"));
+    }
+    if let Some(sub) = build_extra(1) {
+        m.submenu(sub, &t("menu-tools"));
+    }
+    m.separator();
     m.item(ID_TOOLBAR, &t("tray-show-toolbar"), crate::toolbar::is_visible());
     m.item(ID_EDITOR, &t("tray-open-editor"), false);
     m.item(ID_FOLDER, &t("tray-open-folder"), false);
@@ -239,6 +284,7 @@ pub fn dispatch(id: u32) -> bool {
         }
         ID_ABOUT => AppCommand::About,
         ID_EXIT => AppCommand::Exit,
+        _ if (ID_EXTRA..ID_EXTRA + EXTRA.len() as u32).contains(&id) => (EXTRA[idx(ID_EXTRA)].1)(),
         _ => return false,
     };
     app::post(cmd);

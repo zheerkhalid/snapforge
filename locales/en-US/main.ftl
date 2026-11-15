@@ -948,3 +948,27 @@ editor-effect-no-params = This effect has no options.
 editor-effect-placeholder = This effect is not available in this build yet.
 editor-effect-unavailable = { $name } is not available in this build yet.
 editor-effect-nochange = { $name } made no change.
+
+## Tray and toolbar menus (phases 4-5)
+menu-record = Screen Recorder
+menu-record-fullscreen = Record Full Screen
+menu-record-window = Record Window
+menu-record-region = Record Region
+menu-record-fixed = Record Fixed-Size Region
+menu-record-pause = Pause / Resume Recording
+menu-record-stop = Stop Recording
+menu-record-schedule = Schedule Recording…
+menu-video-editor = Video Editor…
+menu-convert-mp4 = Convert to MP4…
+menu-tools = Tools
+menu-capture-text = Capture Text (OCR)
+menu-pin-capture = Pin Region to Screen
+menu-pin-clipboard = Pin Clipboard Image
+menu-color-picker = Screen Color Picker
+menu-magnifier = Screen Magnifier
+menu-crosshair = Screen Crosshair
+menu-focus = Screen Focus
+menu-ruler = Screen Ruler
+menu-combine = Combine Images…
+menu-to-pdf = Convert Images to PDF…
+menu-batch-print = Batch Print…

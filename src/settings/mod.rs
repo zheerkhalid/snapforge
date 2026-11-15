@@ -448,6 +448,16 @@ pub struct HotkeySettings {
     pub scrolling: String,
     pub fixed_region: String,
     pub repeat_last: String,
+    // Phases 4-5 (unassigned by default, to avoid stealing common app shortcuts).
+    pub record_region: String,
+    pub record_full_screen: String,
+    pub stop_recording: String,
+    pub pause_recording: String,
+    pub capture_text: String,
+    pub pin_capture: String,
+    pub color_picker: String,
+    pub magnifier: String,
+    pub ruler: String,
     /// Take over PrtSc even when Windows maps it to the Snipping Tool (low-level hook).
     pub prtsc_override: bool,
 }
@@ -463,12 +473,52 @@ impl Default for HotkeySettings {
             scrolling: "Ctrl+Alt+PrtSc".into(),
             fixed_region: "Ctrl+Shift+Alt+PrtSc".into(),
             repeat_last: String::new(),
+            record_region: String::new(),
+            record_full_screen: String::new(),
+            stop_recording: String::new(),
+            pause_recording: String::new(),
+            capture_text: String::new(),
+            pin_capture: String::new(),
+            color_picker: String::new(),
+            magnifier: String::new(),
+            ruler: String::new(),
             prtsc_override: true,
         }
     }
 }
 
 impl HotkeySettings {
+    /// Phase 4-5 hotkeys as (fluent label key, value), in a stable order.
+    pub fn extras(&self) -> [(&'static str, &String); 9] {
+        [
+            ("menu-record-region", &self.record_region),
+            ("menu-record-fullscreen", &self.record_full_screen),
+            ("menu-record-stop", &self.stop_recording),
+            ("menu-record-pause", &self.pause_recording),
+            ("menu-capture-text", &self.capture_text),
+            ("menu-pin-capture", &self.pin_capture),
+            ("menu-color-picker", &self.color_picker),
+            ("menu-magnifier", &self.magnifier),
+            ("menu-ruler", &self.ruler),
+        ]
+    }
+
+    /// Mutable access to an extra hotkey by its label key.
+    pub fn extra_mut(&mut self, key: &str) -> Option<&mut String> {
+        Some(match key {
+            "menu-record-region" => &mut self.record_region,
+            "menu-record-fullscreen" => &mut self.record_full_screen,
+            "menu-record-stop" => &mut self.stop_recording,
+            "menu-record-pause" => &mut self.pause_recording,
+            "menu-capture-text" => &mut self.capture_text,
+            "menu-pin-capture" => &mut self.pin_capture,
+            "menu-color-picker" => &mut self.color_picker,
+            "menu-magnifier" => &mut self.magnifier,
+            "menu-ruler" => &mut self.ruler,
+            _ => return None,
+        })
+    }
+
     pub fn for_mode(&self, m: CaptureMode) -> &str {
         match m {
             CaptureMode::ActiveWindow => &self.active_window,
