@@ -19,6 +19,11 @@ SnapForge runs in the notification area (tray). Press a hotkey, or click a butto
 
 You can reassign any hotkey in `settings.toml` under `[hotkeys]` (a Settings window arrives in Phase 6). If Windows has mapped PrtSc to open the Snipping Tool, SnapForge still takes over PrtSc when `prtsc_override = true` (the default).
 
+## Capture toolbar
+
+- Drag image files (or `.sfcap` projects or videos) onto the toolbar to open them in the editor. Videos open in the video editor. When the toolbar is slid up at the top edge, dragging files onto its strip brings it down.
+- Right-click the toolbar for **Toolbar Always Visible**, which stops it from sliding up at the top edge of the screen. The option is also in the tray menu and in Settings ▸ Toolbar.
+
 ## Inside a capture
 
 | Mode | Keys and mouse |
@@ -49,6 +54,7 @@ These options can be combined with any destination:
 
 - **Preview in Editor First**: shows the capture in the editor, with a *Continue to …* button.
 - **Also Copy to Clipboard**
+- **Also Save to File (Auto-Save)**: every capture is saved straight away to the output folder, named by the file-name template (Settings ▸ Output). When the capture opens in the editor, its tab is tied to that file, so **Save** updates it.
 - **Add Date/Time Stamp**
 
 ## File names

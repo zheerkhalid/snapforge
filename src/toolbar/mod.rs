@@ -3,6 +3,7 @@
 //! CONTRACT: called on the UI thread. Buttons and menus send `crate::app::post(…)`.
 //! Persists position/options in `settings.toolbar`.
 
+mod drop;
 pub mod icons;
 pub mod layout;
 mod paint;
@@ -88,6 +89,8 @@ struct Toolbar {
     hide_timer: bool,
     moving: bool,
     menu_open: bool,
+    /// Files are being dragged over the toolbar (OLE drag and drop).
+    dragging: bool,
 }
 
 impl Drop for Toolbar {
@@ -391,8 +394,10 @@ pub fn create() -> Result<()> {
         hide_timer: false,
         moving: false,
         menu_open: false,
+        dragging: false,
     };
     TB.with(|c| *c.borrow_mut() = Some(tb));
+    drop::register(hwnd);
     update_tooltips();
     log::debug!("toolbar created at {},{}", pos.x, pos.y);
     Ok(())
@@ -537,6 +542,7 @@ fn can_auto_hide(tb: &Toolbar) -> bool {
         && visible
         && !tb.moving
         && !tb.menu_open
+        && !tb.dragging
         && tb.pressed.is_none()
         && docked_monitor(Rect::new(tb.pos.x, tb.pos.y, tb.layout.w, tb.layout.h)).is_some()
 }
@@ -630,6 +636,21 @@ fn on_anim_timer() {
         if shown {
             arm_hide();
         }
+    }
+}
+
+/// A drag entered (`true`) or left / dropped (`false`): slide down and stay down
+/// while files hover over the toolbar, then resume auto-hide.
+fn drag_over(entered: bool) {
+    with(|tb| {
+        tb.dragging = entered;
+        if entered {
+            disarm_hide(tb);
+            reveal(tb);
+        }
+    });
+    if !entered {
+        arm_hide();
     }
 }
 
@@ -728,7 +749,7 @@ fn show_context_menu(x: i32, y: i32) {
     };
     m.item(ID_BIG, &t("toolbar-big-buttons"), big);
     m.item(ID_LOCK, &t("toolbar-lock"), locked);
-    m.item(ID_AUTOHIDE, &t("toolbar-auto-hide"), auto_hide);
+    m.item(ID_AUTOHIDE, &t("toolbar-always-visible"), !auto_hide);
     if let Some(sub) = Menu::new() {
         let visible = layout::buttons_from_ids(&ids);
         for (i, b) in Button::configurable().into_iter().enumerate() {
@@ -973,6 +994,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_DISPLAYCHANGE => {
             ensure_on_screen();
         }
+        windows::Win32::UI::WindowsAndMessaging::WM_DESTROY => drop::revoke(hwnd),
         _ => {}
     }
     DefWindowProcW(hwnd, msg, wp, lp)

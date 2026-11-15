@@ -725,12 +725,31 @@ fn deliver(o: CaptureOutcome) {
             log::warn!("auto-copy failed: {e:#}");
         }
     }
+    // Auto-save: write the capture to the output folder now, whatever the destination
+    // (the File destination already does exactly this).
+    let auto_saved = (s.output.auto_save && dest != Destination::File && o.out_path.is_none()).then(|| {
+        let path = output_path();
+        let (img, p) = (image.clone(), path.clone());
+        let quiet = matches!(dest, Destination::Editor | Destination::Draw);
+        io(move || match output::save::save_image(&img, &p) {
+            Ok(()) => {
+                log::info!("auto-saved {}", p.display());
+                if !quiet {
+                    notify_saved(&p);
+                }
+            }
+            Err(e) => notify_err(&e),
+        });
+        path
+    });
     if s.output.preview_in_editor && !explicit && !matches!(dest, Destination::Editor | Destination::Draw) {
-        editor::open_image(image, capture_title(), None, Some(dest));
+        editor::open_image(image, capture_title(), auto_saved, Some(dest));
         return;
     }
     let exit_after = with_state(|st| st.exit_after_output);
-    deliver_to(image, dest, o.out_path, exit_after);
+    // The editor tab is tied to the auto-saved file, so Save updates that file.
+    let path = if dest == Destination::Editor { o.out_path.or(auto_saved) } else { o.out_path };
+    deliver_to(image, dest, path, exit_after);
 }
 
 fn capture_title() -> String {
@@ -793,7 +812,7 @@ fn deliver_to(image: Image, dest: Destination, explicit_path: Option<PathBuf>, e
             if dest == Destination::Draw {
                 editor::open_image_draw(image, capture_title());
             } else {
-                editor::open_image(image, capture_title(), None, None);
+                editor::open_image(image, capture_title(), explicit_path, None);
             }
             // A standalone CLI run that opens the editor keeps running in the tray.
             if exit_after {

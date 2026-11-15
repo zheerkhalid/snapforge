@@ -31,6 +31,8 @@ dest-upload = FTP / SFTP Upload
 dest-program = External Program
 opt-preview = Preview in Editor First
 opt-autocopy = Also Copy to Clipboard
+opt-autosave = Also Save to File (Auto-Save)
+opt-autosave-tip = Save every capture straight away to the folder below, named by the file-name template, in addition to the destination.
 opt-timestamp = Add Date/Time Stamp
 output-to = Output To
 
@@ -53,7 +55,8 @@ tray-exit = Exit
 ## Toolbar
 toolbar-big-buttons = Bigger Buttons
 toolbar-lock = Lock Position
-toolbar-auto-hide = Auto-Hide at Top Edge
+toolbar-always-visible = Toolbar Always Visible
+toolbar-always-visible-tip = Keep the toolbar shown. When off, a toolbar docked at the top edge of the screen slides up after the mouse leaves it.
 toolbar-customize = Visible Buttons
 toolbar-minimize = Minimize to Tray
 toolbar-menu = Menu

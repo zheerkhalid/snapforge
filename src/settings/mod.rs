@@ -386,6 +386,9 @@ pub struct OutputSettings {
     /// Show the editor first; the editor offers "Continue" to the destination.
     pub preview_in_editor: bool,
     pub auto_copy: bool,
+    /// Also save every capture to the output folder, named by the file-name template,
+    /// whatever the destination.
+    pub auto_save: bool,
     pub timestamp: bool,
     /// Same tokens as file names ($Y $M $D $H $N $S).
     pub timestamp_format: String,
@@ -405,6 +408,7 @@ impl Default for OutputSettings {
             destination: Destination::Editor,
             preview_in_editor: false,
             auto_copy: false,
+            auto_save: false,
             timestamp: false,
             timestamp_format: "$Y-$M-$D $H:$N:$S".into(),
             folder: String::new(),

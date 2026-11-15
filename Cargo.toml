@@ -1,6 +1,6 @@
 [package]
 name = "snapforge"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Zheer Khalid (https://zheer.dev)"]
 description = "SnapForge - a fast, native Windows screen capture, annotation and recording tool"
@@ -87,6 +87,7 @@ features = [
     "Win32_System_ProcessStatus",
     "Win32_System_Registry",
     "Win32_System_SystemInformation",
+    "Win32_System_SystemServices",
     "Win32_System_Threading",
     "Win32_System_Time",
     "Win32_System_Variant",

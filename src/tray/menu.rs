@@ -24,6 +24,7 @@ const ID_DEST: u32 = 300; // + destination index
 const ID_PREVIEW: u32 = 320;
 const ID_AUTOCOPY: u32 = 321;
 const ID_TIMESTAMP: u32 = 322;
+const ID_AUTOSAVE: u32 = 323;
 const ID_AUTO_CAPTURE: u32 = 400;
 const ID_TOOLBAR: u32 = 401;
 const ID_EDITOR: u32 = 402;
@@ -32,6 +33,7 @@ const ID_SETTINGS: u32 = 404;
 const ID_AUTOSTART: u32 = 405;
 const ID_ABOUT: u32 = 406;
 const ID_EXIT: u32 = 407;
+const ID_TOOLBAR_ALWAYS: u32 = 408;
 const ID_EXTRA: u32 = 500; // + index in EXTRA
 
 /// Recorder and tool entries: (fluent key, command factory, submenu index 0=record 1=tools).
@@ -195,9 +197,9 @@ pub fn build_delay() -> Option<Menu> {
 
 pub fn build_output() -> Option<Menu> {
     let m = Menu::new()?;
-    let (dest, preview, autocopy, stamp) = {
+    let (dest, preview, autocopy, stamp, autosave) = {
         let s = settings::get();
-        (s.output.destination, s.output.preview_in_editor, s.output.auto_copy, s.output.timestamp)
+        (s.output.destination, s.output.preview_in_editor, s.output.auto_copy, s.output.timestamp, s.output.auto_save)
     };
     for (i, d) in Destination::ALL.iter().enumerate() {
         m.item(ID_DEST + i as u32, &t(d.label_key()), false);
@@ -208,6 +210,7 @@ pub fn build_output() -> Option<Menu> {
     m.separator();
     m.item(ID_PREVIEW, &t("opt-preview"), preview);
     m.item(ID_AUTOCOPY, &t("opt-autocopy"), autocopy);
+    m.item(ID_AUTOSAVE, &t("opt-autosave"), autosave);
     m.item(ID_TIMESTAMP, &t("opt-timestamp"), stamp);
     Some(m)
 }
@@ -239,6 +242,7 @@ pub fn build_full() -> Option<Menu> {
     }
     m.separator();
     m.item(ID_TOOLBAR, &t("tray-show-toolbar"), crate::toolbar::is_visible());
+    m.item(ID_TOOLBAR_ALWAYS, &t("toolbar-always-visible"), !settings::get().toolbar.auto_hide);
     m.item(ID_EDITOR, &t("tray-open-editor"), false);
     m.item(ID_FOLDER, &t("tray-open-folder"), false);
     m.item(ID_SETTINGS, &t("tray-settings"), false);
@@ -264,6 +268,10 @@ pub fn dispatch(id: u32) -> bool {
         ID_PREVIEW => AppCommand::TogglePreview,
         ID_AUTOCOPY => AppCommand::ToggleAutoCopy,
         ID_TIMESTAMP => AppCommand::ToggleTimestamp,
+        ID_AUTOSAVE => {
+            settings::update(|s| s.output.auto_save = !s.output.auto_save);
+            return true;
+        }
         ID_AUTO_CAPTURE => AppCommand::ToggleAutoCapture,
         ID_TOOLBAR => AppCommand::ToggleToolbar,
         ID_EDITOR => AppCommand::OpenEditor,
@@ -280,6 +288,11 @@ pub fn dispatch(id: u32) -> bool {
                     app::notify(t("app-name"), tf("notify-error", &[("error", &format!("{e:#}"))]), true);
                 }
             }
+            return true;
+        }
+        ID_TOOLBAR_ALWAYS => {
+            settings::update(|s| s.toolbar.auto_hide = !s.toolbar.auto_hide);
+            crate::toolbar::refresh();
             return true;
         }
         ID_ABOUT => AppCommand::About,

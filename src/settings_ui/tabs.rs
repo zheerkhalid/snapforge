@@ -297,6 +297,7 @@ fn output(ui: &mut Ui, s: &mut Session) {
         });
         ui.checkbox(&mut o.preview_in_editor, t("opt-preview"));
         ui.checkbox(&mut o.auto_copy, t("opt-autocopy"));
+        ui.checkbox(&mut o.auto_save, t("opt-autosave")).on_hover_text(t("opt-autosave-tip"));
         ui.checkbox(&mut o.timestamp, t("opt-timestamp"));
     });
     ui.add_space(8.0);
@@ -776,7 +777,14 @@ fn toolbar(ui: &mut Ui, s: &mut Session) {
         ui.checkbox(&mut tb.visible, t("tray-show-toolbar"));
         ui.checkbox(&mut tb.big_buttons, t("toolbar-big-buttons"));
         ui.checkbox(&mut tb.locked, t("toolbar-lock"));
-        ui.checkbox(&mut tb.auto_hide, t("toolbar-auto-hide"));
+        let mut always = !tb.auto_hide;
+        if ui
+            .checkbox(&mut always, t("toolbar-always-visible"))
+            .on_hover_text(t("toolbar-always-visible-tip"))
+            .changed()
+        {
+            tb.auto_hide = !always;
+        }
     });
     ui.add_space(8.0);
     card(ui, &p, &t("toolbar-customize"), |ui| {
