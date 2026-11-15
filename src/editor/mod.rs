@@ -34,6 +34,7 @@
 //! [`set_tools_host`]; effects edit pixels through `Document::apply_image_edit`,
 //! `apply_region_edit`, `commit_image` and `commit_region` (one undo step each).
 
+mod annot;
 mod app;
 mod canvas;
 mod commands;
@@ -42,7 +43,11 @@ mod document;
 mod effects;
 mod ext;
 mod fileops;
+mod fx_install;
+mod fx_session;
 mod history;
+#[cfg(test)]
+mod integration_tests;
 mod jobs;
 mod menus;
 mod modals;
@@ -50,9 +55,11 @@ mod palette;
 mod param_dialog;
 mod scan;
 mod scan_post;
+mod screen_pick;
 mod selection;
 mod style;
 mod texture;
+mod tools_dialogs;
 mod view;
 mod window;
 
@@ -159,10 +166,61 @@ pub static LAST_IMAGE_PRESENTED_QPC: AtomicI64 = AtomicI64::new(0);
 
 /// Messages from any thread to the editor thread.
 pub(crate) enum EditorMsg {
-    Open { img: Image, title: String, path: Option<PathBuf>, continue_to: Option<Destination>, qpc: i64 },
+    Open {
+        img: Image,
+        title: String,
+        path: Option<PathBuf>,
+        continue_to: Option<Destination>,
+        qpc: i64,
+        /// Start with the default draw tool (the "Draw" destination).
+        draw: bool,
+    },
     OpenFiles(Vec<PathBuf>),
     Show,
     Shutdown,
+    /// The Settings window (on a tab); the editor window itself stays as it is.
+    OpenSettings(Option<crate::settings_ui::Tab>),
+    /// A Tools dialog, with the open images when it came from the editor.
+    OpenTool(tools_dialogs::ToolKind, Option<ToolsContext>),
+    /// HOOK(video-editor): open the video editor window (see [`open_video_editor`]).
+    OpenVideo(Option<PathBuf>),
+}
+
+/// Built-in registrations (effects, draw tools, clone stamp, tools host), once per process.
+fn register_builtins() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        register_effects(fx_install::install);
+        register_effects(fx_session::install);
+        register_canvas_tools(annot::draw_tools);
+        register_canvas_tools(|| vec![Box::new(fx_session::CloneTool::new())]);
+        let has_host = EXT.lock().map(|e| e.host.is_some()).unwrap_or(false);
+        if !has_host {
+            set_tools_host(Arc::new(EditorToolsHost));
+        }
+    });
+}
+
+/// Tools ▸ Combine / PDF / Batch Print open the editor's own dialogs.
+struct EditorToolsHost;
+
+impl ToolsHost for EditorToolsHost {
+    fn combine_images(&self, ctx: ToolsContext) {
+        send(EditorMsg::OpenTool(tools_dialogs::ToolKind::Combine, Some(ctx)), true);
+    }
+    fn images_to_pdf(&self, ctx: ToolsContext) {
+        send(EditorMsg::OpenTool(tools_dialogs::ToolKind::Pdf, Some(ctx)), true);
+    }
+    fn batch_print(&self, ctx: ToolsContext) {
+        send(EditorMsg::OpenTool(tools_dialogs::ToolKind::BatchPrint, Some(ctx)), true);
+    }
+}
+
+/// The editor window should start hidden (the Settings window was asked for first).
+static START_HIDDEN: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn start_hidden() -> bool {
+    START_HIDDEN.load(Ordering::Acquire)
 }
 
 struct Shared {
@@ -198,6 +256,7 @@ pub(crate) fn editor_hwnd() -> isize {
 }
 
 fn spawn_thread() -> Option<Sender<EditorMsg>> {
+    register_builtins();
     let (tx, rx) = channel();
     if let Ok(mut e) = SHARED.exited.lock() {
         *e = false;
@@ -268,16 +327,77 @@ fn wake(show: bool) {
 /// (possibly edited) image on via `AppCommand::Deliver`.
 pub fn open_image(img: Image, title: String, path: Option<PathBuf>, continue_to: Option<Destination>) {
     let qpc = qpc_now();
-    send(EditorMsg::Open { img, title, path, continue_to, qpc }, true);
+    START_HIDDEN.store(false, Ordering::Release);
+    send(EditorMsg::Open { img, title, path, continue_to, qpc, draw: false }, true);
+}
+
+/// Open an image with the draw tools active (the "Draw" destination): the default draw
+/// tool (Settings ▸ Draw, or right-click a palette tool) is selected.
+pub fn open_image_draw(img: Image, title: String) {
+    let qpc = qpc_now();
+    START_HIDDEN.store(false, Ordering::Release);
+    send(EditorMsg::Open { img, title, path: None, continue_to: None, qpc, draw: true }, true);
+}
+
+/// Open the Settings window. Starts the editor thread if needed; the editor's main window
+/// stays hidden if it was (the Settings window is its own viewport).
+pub fn open_settings() {
+    open_settings_tab(None);
+}
+
+/// Settings ▸ About.
+pub fn open_about() {
+    open_settings_tab(Some(crate::settings_ui::Tab::About));
+}
+
+fn open_settings_tab(tab: Option<crate::settings_ui::Tab>) {
+    if !is_running() {
+        START_HIDDEN.store(true, Ordering::Release);
+    }
+    send(EditorMsg::OpenSettings(tab), false);
+    // A hidden editor window runs no frames: pump one off-screen.
+    window::show_ghost(editor_hwnd());
+}
+
+/// Tools ▸ Combine Images from outside the editor (tray, toolbar).
+pub fn open_combine_images() {
+    START_HIDDEN.store(false, Ordering::Release);
+    send(EditorMsg::OpenTool(tools_dialogs::ToolKind::Combine, None), true);
+}
+
+/// Tools ▸ Convert Images to PDF from outside the editor.
+pub fn open_images_to_pdf() {
+    START_HIDDEN.store(false, Ordering::Release);
+    send(EditorMsg::OpenTool(tools_dialogs::ToolKind::Pdf, None), true);
+}
+
+/// Tools ▸ Batch Print from outside the editor.
+pub fn open_batch_print() {
+    START_HIDDEN.store(false, Ordering::Release);
+    send(EditorMsg::OpenTool(tools_dialogs::ToolKind::BatchPrint, None), true);
+}
+
+/// HOOK(video-editor): open the video editor (a `VideoEditorWindow` viewport hosted by the
+/// editor app, like the Settings window: `open(Option<PathBuf>)`, `ui(ctx)`, `is_open()`).
+/// The final integration pass fills in `app::VideoEditorHost`.
+#[allow(dead_code)]
+pub fn open_video_editor(path: Option<PathBuf>) {
+    if !is_running() {
+        START_HIDDEN.store(true, Ordering::Release);
+    }
+    send(EditorMsg::OpenVideo(path), false);
+    window::show_ghost(editor_hwnd());
 }
 
 /// Open files from disk in tabs.
 pub fn open_files(paths: Vec<PathBuf>) {
+    START_HIDDEN.store(false, Ordering::Release);
     send(EditorMsg::OpenFiles(paths), true);
 }
 
 /// Show the editor (empty if no tabs).
 pub fn show() {
+    START_HIDDEN.store(false, Ordering::Release);
     send(EditorMsg::Show, true);
 }
 

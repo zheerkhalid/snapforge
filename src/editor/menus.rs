@@ -43,6 +43,11 @@ pub fn build_registry(
     add(Command::new("file.save_sequence", t("editor-save-sequence"), K::File, Action::SaveAllSequence)
         .when(c::has_doc)
         .keywords("numbered batch base name"));
+    add(Command::new("file.save_project", t("draw-save-project"), K::File, Action::SaveProject)
+        .key("Ctrl+Alt+S")
+        .icon("🗐")
+        .when(c::has_doc)
+        .keywords("sfcap annotations editable project"));
     add(Command::new("file.print", t("editor-print"), K::File, Action::Print).key("Ctrl+P").icon("🖶").when(c::has_doc));
     add(Command::new("file.scan", t("editor-scan"), K::File, Action::Scan)
         .icon("📠")
@@ -107,7 +112,29 @@ pub fn build_registry(
         .when(c::has_selection));
     add(Command::new("edit.delete", t("editor-delete-selection"), K::Select, Action::DeleteSelection)
         .key("Del")
-        .when(c::has_selection));
+        .when(c::can_delete));
+    add(Command::new("draw.duplicate", t("draw-duplicate"), K::Edit, Action::DuplicateObjects)
+        .key("Ctrl+J")
+        .icon("⧉")
+        .when(c::has_objects));
+    for (id, key, dx, dy) in [
+        ("draw.nudge_left", "ArrowLeft", -1, 0),
+        ("draw.nudge_right", "ArrowRight", 1, 0),
+        ("draw.nudge_up", "ArrowUp", 0, -1),
+        ("draw.nudge_down", "ArrowDown", 0, 1),
+        ("draw.nudge_left10", "Shift+ArrowLeft", -10, 0),
+        ("draw.nudge_right10", "Shift+ArrowRight", 10, 0),
+        ("draw.nudge_up10", "Shift+ArrowUp", 0, -10),
+        ("draw.nudge_down10", "Shift+ArrowDown", 0, 10),
+    ] {
+        add(Command::new(id, t("draw-nudge"), K::Edit, Action::Nudge(dx, dy)).key(key).when(c::has_objects).hidden());
+    }
+    add(Command::new("draw.next_tool", t("draw-next-tool"), K::Tools, Action::CycleTool(1))
+        .key("Tab")
+        .when(c::has_doc));
+    add(Command::new("draw.prev_tool", t("draw-prev-tool"), K::Tools, Action::CycleTool(-1))
+        .key("Shift+Tab")
+        .when(c::has_doc));
     add(Command::new("edit.crop", t("editor-crop"), K::Select, Action::CropToSelection)
         .key("Ctrl+T")
         .icon("⛶")
@@ -141,6 +168,7 @@ pub fn build_registry(
         )
         .when(c::has_doc);
         cmd.shortcut = tool.shortcut().and_then(c::Shortcut::parse);
+        cmd.icon = tool.icon();
         add(cmd);
     }
 
@@ -160,6 +188,10 @@ pub fn build_registry(
         .keywords("merge join stitch"));
     add(Command::new("tools.pdf", t("editor-tool-pdf"), K::Tools, Action::ImagesToPdf).icon("📄"));
     add(Command::new("tools.batch_print", t("editor-tool-batch-print"), K::Tools, Action::BatchPrint).icon("🖶"));
+    add(Command::new("tools.settings", t("editor-settings"), K::Tools, Action::Settings)
+        .key("Ctrl+,")
+        .icon("⚙")
+        .keywords("options preferences configure"));
     add(Command::new("tools.palette", t("editor-palette"), K::Tools, Action::Palette)
         .key("Ctrl+K")
         .icon("🔍")
@@ -209,6 +241,8 @@ pub fn build_registry(
         .keywords("group tabs"));
     add(Command::new("view.new_workspace", t("editor-workspace-new"), K::View, Action::NewWorkspace)
         .keywords("group tabs"));
+    add(Command::new("view.draw_palette", t("draw-palette-toggle"), K::View, Action::ToggleDrawPalette)
+        .keywords("draw tools annotate sidebar"));
 
     // Help
     add(Command::new("help.shortcuts", t("editor-shortcuts"), K::Help, Action::Shortcuts).key("F1").icon("⌨"));
@@ -268,7 +302,7 @@ impl EditorApp {
         self.item(ui, "file.open");
         ui.menu_button(t("editor-recent"), |ui| self.recent_menu(ui));
         ui.separator();
-        for id in ["file.save", "file.save_as", "file.save_all", "file.save_sequence"] {
+        for id in ["file.save", "file.save_as", "file.save_all", "file.save_sequence", "file.save_project"] {
             self.item(ui, id);
         }
         ui.separator();
@@ -414,13 +448,28 @@ impl EditorApp {
         for id in ["tool.pan", "tool.rect", "tool.free"] {
             self.item(ui, id);
         }
-        let ext: Vec<String> = self.ext_tools.iter().map(|t| format!("tool.{}", t.id())).collect();
-        if !ext.is_empty() {
+        let ext: Vec<String> =
+            self.ext_tools.iter().filter(|t| t.on_ribbon()).map(|t| format!("tool.{}", t.id())).collect();
+        let draw: Vec<String> =
+            self.ext_tools.iter().filter(|t| !t.on_ribbon()).map(|t| format!("tool.{}", t.id())).collect();
+        if !ext.is_empty() || !draw.is_empty() {
             ui.separator();
             for id in ext {
                 self.item(ui, &id);
             }
+            if !draw.is_empty() {
+                ui.menu_button(t("editor-menu-draw"), |ui| {
+                    ui.set_min_width(240.0);
+                    for id in draw {
+                        self.item(ui, &id);
+                    }
+                    ui.separator();
+                    self.item(ui, "draw.next_tool");
+                    self.item(ui, "draw.prev_tool");
+                });
+            }
         }
+        self.item(ui, "tools.settings");
         ui.separator();
         for id in ["tools.combine", "tools.pdf", "tools.batch_print"] {
             self.item(ui, id);
@@ -450,6 +499,8 @@ impl EditorApp {
             ui.close_menu();
         }
         self.item(ui, "view.new_workspace");
+        ui.separator();
+        self.item(ui, "view.draw_palette");
     }
 
     // ------------------------------------------------------------------ ribbon
@@ -457,14 +508,14 @@ impl EditorApp {
     pub(super) fn ribbon(&mut self, ctx: &egui::Context) {
         let frame = egui::Frame::new().fill(self.pal.bar).inner_margin(Margin { left: 8, right: 8, top: 2, bottom: 4 });
         egui::TopBottomPanel::top("ribbon").frame(frame).show_separator_line(false).show(ctx, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
                 ui.spacing_mut().item_spacing.x = 2.0;
                 self.group(ui, "editor-group-file", &["file.open", "file.save", "file.save_all"]);
                 self.group(ui, "editor-group-history", &["edit.undo", "edit.redo"]);
                 self.group(ui, "editor-group-clipboard", &["edit.copy", "edit.cut", "edit.paste"]);
                 let mut tools = vec!["tool.pan".to_string(), "tool.rect".into(), "tool.free".into()];
-                tools.extend(self.ext_tools.iter().map(|t| format!("tool.{}", t.id())));
+                tools.extend(self.ext_tools.iter().filter(|t| t.on_ribbon()).map(|t| format!("tool.{}", t.id())));
                 let tools: Vec<&str> = tools.iter().map(String::as_str).collect();
                 self.group(ui, "editor-group-tools", &tools);
                 self.group(ui, "editor-group-selection", &["edit.crop", "edit.new_tab", "edit.pin"]);
@@ -472,13 +523,13 @@ impl EditorApp {
                 self.active_tool_options(ui);
                 let cont = self.tabs.active().and_then(|d| d.continue_to);
                 if let Some(dest) = cont {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let label = tf("editor-continue", &[("dest", &t(dest.label_key()))]);
-                        let btn = style::primary_button(format!("{label}  ➡")).min_size(vec2(0.0, 30.0));
-                        if ui.add(btn).clicked() {
-                            self.actions.push(Action::Continue);
-                        }
-                    });
+                    // Inline (not right-aligned) so it wraps with the groups on narrow windows.
+                    let label = tf("editor-continue", &[("dest", &t(dest.label_key()))]);
+                    let btn = style::primary_button(format!("{label}  ➡")).min_size(vec2(0.0, 30.0));
+                    ui.add_space(8.0);
+                    if ui.add(btn).clicked() {
+                        self.actions.push(Action::Continue);
+                    }
                 }
             });
         });
@@ -776,9 +827,11 @@ impl EditorApp {
                         );
                         ui.label(RichText::new(hist).color(muted));
                         dot(ui);
-                        match &d.path {
-                            Some(p) => ui.label(RichText::new(p.display().to_string()).color(muted)),
-                            None => ui.label(RichText::new(t("editor-unsaved")).color(muted).italics()),
+                        match (&d.path, &d.project) {
+                            (Some(p), _) | (None, Some(p)) => {
+                                ui.label(RichText::new(p.display().to_string()).color(muted))
+                            }
+                            (None, None) => ui.label(RichText::new(t("editor-unsaved")).color(muted).italics()),
                         };
                     }
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

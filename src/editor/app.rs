@@ -2,12 +2,14 @@
 //! shortcut dispatch through the command registry, and the actions behind commands.
 //! Panels live in `menus.rs`, dialogs in `modals.rs`.
 
+use super::annot;
 use super::canvas::{self, CanvasCtx, CanvasState};
 use super::commands::{Action, CmdState, CommandRegistry, ToolId, ZoomCmd};
 use super::document::{push_recent, DocId, Document, SaveTarget, Tabs};
 use super::effects::{EffectRegistry, Scope};
 use super::ext::{CanvasTool, ToolsContext};
 use super::fileops::{self, FileWatcher};
+use super::fx_session::{self, FxSession, SessionOutcome};
 use super::history::{Budget, MB};
 use super::jobs::{EffectTarget, JobQueue, JobResult, Jobs};
 use super::modals::Modal;
@@ -15,12 +17,14 @@ use super::palette::{self, PaletteOutcome, PaletteState};
 use super::param_dialog::{DialogOutcome, EffectDialog};
 use super::selection::Selection;
 use super::style::{self, Palette};
+use super::tools_dialogs::{ToolsDialogs, ToolsEvent};
 use super::{dialogs, texture, view, window, EditorMsg, LAST_IMAGE_PRESENTED_QPC};
 use crate::app::{post, AppCommand};
 use crate::common::time::{qpc_ms, qpc_now};
 use crate::common::{win, Image};
 use crate::i18n::{t, tf};
 use crate::settings::{self, Destination};
+use crate::settings_ui::SettingsWindow;
 use eframe::egui::{
     self, vec2, Align2, Color32, CornerRadius, Id, Key, Margin, RichText, Stroke, TextureHandle, ViewportCommand,
 };
@@ -34,10 +38,12 @@ pub(super) const MAX_RECENT: usize = 15;
 
 /// Start eframe on the current (editor) thread; returns when the editor shuts down.
 pub(super) fn run(rx: Receiver<EditorMsg>, t0: i64) -> Result<(), eframe::Error> {
+    let hidden = super::start_hidden();
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(t("editor-title"))
         .with_inner_size([1280.0, 820.0])
         .with_min_inner_size([640.0, 420.0])
+        .with_visible(!hidden)
         .with_drag_and_drop(true);
     if let Some(icon) = style::app_icon() {
         viewport = viewport.with_icon(icon);
@@ -130,22 +136,55 @@ pub struct EditorApp {
     pub(super) hover_px: Option<(i32, i32)>,
     /// Where the open effect dialog's result goes.
     pub(super) pending_effect_target: Option<EffectTarget>,
+    /// The Settings window (its own viewport; shown even while this window is hidden).
+    pub(super) settings_win: SettingsWindow,
+    /// The settings window's icon was set for the current session.
+    settings_icon_done: bool,
+    pub(super) tools_dlg: ToolsDialogs,
+    /// An interactive effect (transparency, spotlight, strips, watermark).
+    pub(super) fx: Option<FxSession>,
+    /// Text of the last egui paste event (annotation JSON is pasted as objects).
+    paste_text: Option<String>,
+    /// HOOK(video-editor): hosts the video editor window.
+    video: VideoEditorHost,
+    /// Started hidden: keep hiding for these first frames (eframe shows after frame 1).
+    hide_frames: u8,
+}
+
+/// HOOK(video-editor): placeholder host for `video_editor::VideoEditorWindow` (same shape
+/// as [`SettingsWindow`]: `open(Option<PathBuf>)`, `ui(ctx)`, `is_open()`). The final
+/// integration pass replaces the body of these three methods with the real window.
+#[derive(Default)]
+pub(super) struct VideoEditorHost {
+    requested: Option<Option<PathBuf>>,
+}
+
+impl VideoEditorHost {
+    pub fn open(&mut self, path: Option<PathBuf>) {
+        log::info!("editor: video editor requested ({path:?}); not hosted in this build yet");
+        self.requested = Some(path);
+    }
+    pub fn ui(&mut self, _ctx: &egui::Context) {}
+    pub fn is_open(&self) -> bool {
+        false
+    }
 }
 
 impl EditorApp {
     fn new(cc: &eframe::CreationContext<'_>, rx: Receiver<EditorMsg>, t0: i64) -> Self {
         let ctx = cc.egui_ctx.clone();
         let hwnd = hwnd_of(cc);
-        let dark = win::system_dark_mode();
+        let dark = want_dark();
         let pal = style::apply(&ctx, dark);
         ctx.options_mut(|o| o.zoom_with_keyboard = false);
         if hwnd != 0 {
             let h = win::hwnd_from_isize(hwnd);
             win::set_dark_titlebar(h, dark);
-            let saved = settings::get().editor.window;
-            match saved {
-                Some(p) if window::restore_placement(hwnd, p) => {}
-                _ => window::fit_to_work_area(hwnd),
+            window::initial_placement(hwnd, settings::get().editor.window);
+            if super::start_hidden() {
+                // Only the Settings window was asked for: eframe shows this window after
+                // its first frame, so make that invisible; it is hidden right after.
+                window::make_ghost(hwnd);
             }
         }
         super::register_window(ctx.clone(), hwnd);
@@ -190,7 +229,18 @@ impl EditorApp {
             cmd_state: CmdState::default(),
             hover_px: None,
             pending_effect_target: None,
+            settings_win: SettingsWindow::new(),
+            settings_icon_done: false,
+            tools_dlg: ToolsDialogs::new(),
+            fx: None,
+            paste_text: None,
+            video: VideoEditorHost::default(),
+            hide_frames: 0,
         };
+        if super::start_hidden() {
+            app.visible = false;
+            app.hide_frames = 3;
+        }
         app.apply_workspace_filter();
         app.restore_workspaces();
         app
@@ -276,12 +326,33 @@ impl EditorApp {
         let mut show = false;
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
-                EditorMsg::Open { img, title, path, continue_to, qpc } => {
+                EditorMsg::Open { img, title, path, continue_to, qpc, draw } => {
                     let id = self.tabs.next_id();
                     let mut doc = Document::new(id, img, title, path, continue_to);
                     doc.opened_qpc = Some(qpc);
                     self.push_doc(doc, None);
+                    if draw {
+                        let tool = settings::get().draw.default_tool;
+                        self.set_tool(ToolId::External(annot::tool_cmd_id(tool)));
+                    }
                     show = true;
+                }
+                EditorMsg::OpenSettings(tab) => {
+                    match tab {
+                        Some(tab) => self.settings_win.open_tab(tab),
+                        None => self.settings_win.open(),
+                    }
+                    self.settings_icon_done = false;
+                    self.pumped_hidden();
+                }
+                EditorMsg::OpenTool(kind, tctx) => {
+                    let tctx = tctx.unwrap_or_else(|| self.tools_context());
+                    self.tools_dlg.open(kind, tctx);
+                    show = true;
+                }
+                EditorMsg::OpenVideo(path) => {
+                    self.video.open(path);
+                    self.pumped_hidden();
                 }
                 EditorMsg::OpenFiles(paths) => {
                     self.open_paths(paths);
@@ -298,6 +369,8 @@ impl EditorApp {
             }
         }
         if show && !self.allow_close {
+            self.hide_frames = 0;
+            window::unghost(self.hwnd);
             if !self.visible {
                 // Shown from another thread with ShowWindow; keep winit's state in sync.
                 ctx.send_viewport_cmd(ViewportCommand::Visible(true));
@@ -307,6 +380,15 @@ impl EditorApp {
             ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(ViewportCommand::Focus);
             window::focus(self.hwnd);
+        }
+    }
+
+    /// The window is hidden but was shown invisibly to run this frame
+    /// (`window::show_ghost`): hide it again, and restore the placement when it is
+    /// really shown.
+    fn pumped_hidden(&mut self) {
+        if !self.visible {
+            self.hide_frames = self.hide_frames.max(2);
         }
     }
 
@@ -323,7 +405,7 @@ impl EditorApp {
     }
 
     fn refresh_theme(&mut self, ctx: &egui::Context) {
-        let dark = win::system_dark_mode();
+        let dark = want_dark();
         if dark != self.pal.dark {
             self.pal = style::apply(ctx, dark);
             self.checker = texture::checker_texture(ctx, dark);
@@ -333,6 +415,18 @@ impl EditorApp {
 
     pub(super) fn open_paths(&mut self, paths: Vec<PathBuf>) {
         let mut to_load = Vec::new();
+        let (projects, paths): (Vec<PathBuf>, Vec<PathBuf>) =
+            paths.into_iter().partition(|p| crate::draw::sfcap::is_sfcap(p));
+        for p in projects {
+            let open = self.tabs.docs.iter().find(|d| d.project.as_deref() == Some(p.as_path())).map(|d| d.id);
+            match open {
+                Some(id) => self.show_doc(id),
+                None => {
+                    self.loading += 1;
+                    self.jobs.load_project(vec![p]);
+                }
+            }
+        }
         for p in paths {
             if let Some(id) = self.tabs.find_path(&p) {
                 self.show_doc(id);
@@ -487,6 +581,47 @@ impl EditorApp {
                     self.toast(tf("editor-print-failed", &[("error", &e)]), true);
                 }
             }
+            JobResult::ProjectLoaded { path, result } => {
+                self.loading = self.loading.saturating_sub(1);
+                match result {
+                    Ok((img, objects, meta)) => {
+                        remember_recent(&path);
+                        let id = self.tabs.next_id();
+                        let title = if meta.title.trim().is_empty() { file_name(&path) } else { meta.title.clone() };
+                        let mut doc = Document::new(id, img, title, None, None);
+                        let layer = annot::layer::DrawLayer::with_objects(doc.image.clone(), objects);
+                        doc.overlay = Some(Box::new(layer));
+                        let rev = doc.revision;
+                        doc.on_project_saved(path.clone(), rev);
+                        doc.title = file_name(&path);
+                        self.push_doc(doc, None);
+                        self.set_tool(ToolId::External(annot::tool_cmd_id(crate::draw::Tool::Select)));
+                    }
+                    Err(e) => {
+                        let msg = if e.contains("newer") { t("draw-project-newer") } else { e };
+                        self.toast(tf("editor-open-failed", &[("name", &file_name(&path)), ("error", &msg)]), true);
+                    }
+                }
+            }
+            JobResult::ProjectSaved { doc, path, revision, result } => match result {
+                Ok(()) => {
+                    if let Some(d) = self.tabs.get_mut(doc) {
+                        d.on_project_saved(path.clone(), revision);
+                    }
+                    remember_recent(&path);
+                    self.toast(tf("notify-saved", &[("path", &path.display().to_string())]), false);
+                }
+                Err(e) => self.toast(tf("editor-save-failed", &[("error", &e)]), true),
+            },
+            JobResult::Picture { doc, at, result } => match result {
+                Ok((png, size)) => {
+                    if let Some(d) = self.tabs.get_mut(doc) {
+                        annot::with_state(|s| s.insert_picture(d, png, size, at));
+                    }
+                }
+                Err(e) => self.toast(tf("editor-open-failed", &[("name", &t("draw-tool-image")), ("error", &e)]), true),
+            },
+            JobResult::Toast(text) => self.toast(text, false),
         }
     }
 
@@ -562,6 +697,8 @@ impl EditorApp {
             busy,
             can_continue: d.is_some_and(|d| d.continue_to.is_some()),
             workspaces: Self::workspaces_on(),
+            has_objects: d.is_some_and(|d| annot::with_state(|s| s.has_selection(d))),
+            has_annotations: d.is_some_and(|d| d.has_annotations()),
         };
     }
 
@@ -572,6 +709,7 @@ impl EditorApp {
         let mut acts = Vec::new();
         let reg = &self.registry;
         let state = self.cmd_state;
+        let mut paste_text = None;
         ctx.input_mut(|i| {
             i.events.retain(|e| {
                 let egui::Event::Key { key, pressed: true, modifiers, .. } = e else { return true };
@@ -599,12 +737,18 @@ impl EditorApp {
                     match e {
                         egui::Event::Copy => acts.push(Action::Copy),
                         egui::Event::Cut => acts.push(Action::Cut),
-                        egui::Event::Paste(_) => acts.push(Action::Paste),
+                        egui::Event::Paste(text) => {
+                            paste_text = Some(text.clone());
+                            acts.push(Action::Paste);
+                        }
                         _ => {}
                     }
                 }
             }
         });
+        if paste_text.is_some() {
+            self.paste_text = paste_text;
+        }
         // egui only reports Ctrl+V when the clipboard holds text; watch the key itself
         // so image pastes work too.
         let v_down = key_down(0x56) && (key_down(0x11)) && ctx.input(|i| i.focused);
@@ -622,7 +766,8 @@ impl EditorApp {
     fn handle_drops(&mut self, ctx: &egui::Context) {
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.path.clone()).collect());
         if !dropped.is_empty() {
-            let (ok, skipped): (Vec<_>, Vec<_>) = dropped.into_iter().partition(|p| dialogs::is_supported_image(p));
+            let (ok, skipped): (Vec<_>, Vec<_>) =
+                dropped.into_iter().partition(|p| dialogs::is_supported_image(p) || crate::draw::sfcap::is_sfcap(p));
             if let Some(p) = skipped.first() {
                 let name = file_name(p);
                 self.toast(tf("editor-open-failed", &[("name", &name), ("error", &t("editor-unsupported"))]), true);
@@ -643,8 +788,12 @@ impl EditorApp {
         match a {
             Action::Open => {
                 let folder = default_folder();
-                let files =
-                    dialogs::open_files(self.hwnd, Some(&folder), &t("editor-filter-images"), &t("editor-filter-all"));
+                let mut items = dialogs::open_filter_items(&t("editor-filter-images"), &t("editor-filter-all"));
+                if let Some(first) = items.first_mut() {
+                    first.1.push_str(";*.sfcap");
+                }
+                items.insert(1, (t("draw-filter-project"), "*.sfcap".into()));
+                let files = dialogs::open_files_with(self.hwnd, Some(&folder), &items, true);
                 if let Some(dir) = files.first().and_then(|p| p.parent()) {
                     remember_folder(dir);
                 }
@@ -728,10 +877,11 @@ impl EditorApp {
             }
             Action::Scan => self.modal = Some(Modal::Scan(settings::get().editor_ext.scan.clone())),
             Action::Print => {
+                self.finish_draw();
                 if let Some(d) = self.tabs.active() {
                     if !self.printing {
                         self.printing = true;
-                        self.jobs.print(d.composited(), self.hwnd, d.title.clone());
+                        self.jobs.print(d.export_job(false), self.hwnd, d.title.clone());
                     }
                 }
             }
@@ -749,20 +899,42 @@ impl EditorApp {
             Action::UndoMany(n) => self.step_history(n as isize),
             Action::RedoMany(n) => self.step_history(-(n as isize)),
             Action::Copy => {
+                if self.copy_objects(ctx) {
+                    return;
+                }
                 if let Some(d) = self.tabs.active() {
-                    self.jobs.copy(Arc::new(d.selection_or_image()));
+                    self.jobs.copy(d.export_job(d.selection.is_some()));
                 }
             }
             Action::Cut => {
+                if self.copy_objects(ctx) {
+                    if let Some(d) = self.tabs.active_mut() {
+                        annot::with_state(|s| s.delete_selected(d));
+                    }
+                    return;
+                }
                 if let Some(d) = self.tabs.active() {
                     if d.selection.is_some() {
-                        self.jobs.copy(Arc::new(d.selection_or_image()));
+                        self.jobs.copy(d.export_job(true));
                         self.delete_selection("Cut");
                     }
                 }
             }
-            Action::Paste => self.jobs.paste(false),
+            Action::Paste => {
+                let text = self.paste_text.take();
+                if let (Some(text), Some(d)) = (text, self.tabs.active_mut()) {
+                    if annot::with_state(|s| s.paste_json(d, &text)) {
+                        return;
+                    }
+                }
+                self.jobs.paste(false)
+            }
             Action::PasteNewTab => self.jobs.paste(true),
+            Action::SelectAll if self.draw_tool().is_some() => {
+                if let Some(d) = self.tabs.active() {
+                    annot::with_state(|s| s.select_all(d));
+                }
+            }
             Action::SelectAll => {
                 if let Some(d) = self.tabs.active_mut() {
                     d.deselect();
@@ -772,6 +944,9 @@ impl EditorApp {
             }
             Action::Deselect => {
                 if let Some(d) = self.tabs.active_mut() {
+                    if annot::with_state(|s| s.escape(d)) {
+                        return;
+                    }
                     if d.floating.is_some() {
                         d.cancel_floating();
                     } else {
@@ -779,13 +954,29 @@ impl EditorApp {
                     }
                 }
             }
-            Action::DeleteSelection => self.delete_selection("Delete"),
+            Action::DeleteSelection => {
+                let objects = self.tabs.active_mut().is_some_and(|d| annot::with_state(|s| s.delete_selected(d)));
+                if !objects {
+                    self.delete_selection("Delete");
+                }
+            }
             Action::CropToSelection => {
+                self.finish_draw();
                 if let Some(d) = self.tabs.active_mut() {
                     d.merge_floating();
                     if let Some(sel) = d.selection.clone() {
                         if d.apply_image_edit("Crop", |img| sel.extract(img)) {
                             d.set_selection(None);
+                            // Annotations keep their place on the picture.
+                            let off = crate::draw::Pt::new(-sel.bounds.x as f32, -sel.bounds.y as f32);
+                            if d.has_annotations() && (off.x != 0.0 || off.y != 0.0) {
+                                annot::layer::edit(d, "Crop", |objs| {
+                                    for o in objs.iter_mut() {
+                                        crate::draw::translate(o, off);
+                                    }
+                                    true
+                                });
+                            }
                         }
                     }
                 }
@@ -799,8 +990,10 @@ impl EditorApp {
                 }
             }
             Action::PinToScreen => {
+                self.finish_draw();
                 if let Some(d) = self.tabs.active() {
-                    post(AppCommand::PinImage(d.selection_or_image()));
+                    let job = d.export_job(d.selection.is_some());
+                    self.jobs.with_export(job, |img| post(AppCommand::PinImage(img)));
                 }
             }
             Action::Tool(tool) => self.set_tool(tool),
@@ -808,6 +1001,30 @@ impl EditorApp {
             Action::CombineImages => super::tools_host().combine_images(self.tools_context()),
             Action::ImagesToPdf => super::tools_host().images_to_pdf(self.tools_context()),
             Action::BatchPrint => super::tools_host().batch_print(self.tools_context()),
+            Action::SaveProject => {
+                if let Some(id) = active {
+                    self.save_project(id, true);
+                }
+            }
+            Action::CycleTool(dir) => {
+                let next = annot::keys::cycle(self.draw_tool(), dir);
+                self.set_tool(ToolId::External(annot::tool_cmd_id(next)));
+            }
+            Action::Nudge(dx, dy) => {
+                if let Some(d) = self.tabs.active_mut() {
+                    annot::with_state(|s| s.nudge(d, dx as f32, dy as f32));
+                }
+            }
+            Action::DuplicateObjects => {
+                if let Some(d) = self.tabs.active_mut() {
+                    annot::with_state(|s| s.duplicate(d));
+                }
+            }
+            Action::ToggleDrawPalette => annot::with_state(|s| s.palette_hidden = !s.palette_hidden),
+            Action::Settings => {
+                self.settings_win.open();
+                self.settings_icon_done = false;
+            }
             Action::Palette => {
                 self.palette = if self.palette.is_some() { None } else { Some(PaletteState::default()) };
             }
@@ -871,8 +1088,10 @@ impl EditorApp {
     }
 
     fn continue_to(&mut self, ctx: &egui::Context, id: DocId, dest: Destination) {
+        self.finish_draw();
         if let Some(d) = self.tabs.get_mut(id) {
-            post(AppCommand::Deliver { image: (*d.composited()).clone(), dest });
+            let job = d.export_job(false);
+            self.jobs.with_export(job, move |image| post(AppCommand::Deliver { image, dest }));
             self.close_doc(id);
             if self.tabs.is_empty() {
                 self.hide(ctx);
@@ -989,7 +1208,14 @@ impl EditorApp {
             return;
         };
         let view = self.view_px;
+        let drawing = self.draw_tool().is_some();
         match self.tabs.active_mut() {
+            Some(d) if !new_tab && drawing => {
+                // With the draw tools, a pasted image becomes an image object.
+                let p = d.view.screen_to_image([0.0, 0.0]);
+                let at = crate::draw::Pt::new(p[0].max(0.0).floor(), p[1].max(0.0).floor());
+                self.jobs.picture_from_image(d.id, img, at);
+            }
             Some(d) if !new_tab => {
                 // Top-left of the visible part of the image.
                 let p = d.view.screen_to_image([0.0, 0.0]);
@@ -1011,6 +1237,24 @@ impl EditorApp {
     fn start_effect(&mut self, ctx: &egui::Context, id: &str) {
         let Some(def) = self.effects.get(id).cloned() else { return };
         if self.applying.is_some() {
+            return;
+        }
+        self.finish_draw();
+        if id == fx_session::COUNT_COLORS {
+            if let Some(d) = self.tabs.active() {
+                let img = match &d.selection {
+                    Some(s) => Arc::new(s.extract(&d.image)),
+                    None => d.image.clone(),
+                };
+                self.jobs.count_colors(img);
+            }
+            return;
+        }
+        if let Some(kind) = fx_session::FxKind::from_id(id) {
+            if let Some(d) = self.tabs.active_mut() {
+                d.merge_floating();
+                self.fx = Some(FxSession::new(ctx, kind, d));
+            }
             return;
         }
         let bg = background_color();
@@ -1064,9 +1308,15 @@ impl EditorApp {
 
     /// Save (`as_new`: always ask for a file). Encoding and writing run on a worker.
     pub(super) fn save(&mut self, id: DocId, as_new: bool, close_after: bool) {
+        self.finish_draw();
         let hwnd = self.hwnd;
         let Some(d) = self.tabs.get_mut(id) else { return };
         if d.saving {
+            return;
+        }
+        if !as_new && d.path.is_none() && d.project.is_some() {
+            // A project opened from .sfcap: Ctrl+S saves the project again.
+            self.save_project(id, false);
             return;
         }
         let target = if as_new { SaveTarget::Prompt } else { d.save_target() };
@@ -1090,8 +1340,66 @@ impl EditorApp {
             }
         };
         d.saving = true;
-        let img = d.composited();
-        self.jobs.save(id, img, path, d.revision, close_after);
+        let project = (d.has_annotations() && settings::get().draw.autosave_project).then(|| project_data(d)).flatten();
+        let img = d.export_job(false);
+        self.jobs.save(id, img, path, d.revision, close_after, project);
+    }
+
+    /// File ▸ Save Project (.sfcap): base image plus editable annotations.
+    fn save_project(&mut self, id: DocId, ask: bool) {
+        self.finish_draw();
+        let hwnd = self.hwnd;
+        let Some(d) = self.tabs.get_mut(id) else { return };
+        let target = if ask { None } else { d.project.clone() };
+        let path = match target {
+            Some(p) => p,
+            None => {
+                let folder = d
+                    .project
+                    .as_deref()
+                    .or(d.path.as_deref())
+                    .and_then(Path::parent)
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(default_folder);
+                let stem = d.suggested_name(crate::settings::ImageFormat::Png);
+                let name = Path::new(&stem).with_extension("sfcap").to_string_lossy().into_owned();
+                let items = [(t("draw-filter-project"), "*.sfcap".to_string())];
+                let Some(p) = dialogs::save_file_with(hwnd, Some(&folder), &name, &items, "sfcap") else { return };
+                if let Some(dir) = p.parent() {
+                    remember_folder(dir);
+                }
+                p
+            }
+        };
+        let Some(data) = project_data(d) else { return };
+        self.jobs.save_project(id, data, path, d.revision);
+    }
+
+    /// The active draw tool, if a draw tool is selected.
+    pub(super) fn draw_tool(&self) -> Option<crate::draw::Tool> {
+        match &self.tool {
+            ToolId::External(id) => annot::tool_of_id(id),
+            _ => None,
+        }
+    }
+
+    /// Finish in-progress drawing (text being typed, polylines) before exporting.
+    fn finish_draw(&mut self) {
+        if let Some(d) = self.tabs.active_mut() {
+            annot::with_state(|s| s.finish_pending(d));
+        }
+    }
+
+    /// Copy the selected annotations (as JSON text) if any are selected.
+    fn copy_objects(&mut self, ctx: &egui::Context) -> bool {
+        let Some(d) = self.tabs.active() else { return false };
+        match annot::with_state(|s| s.copy_selected(d)) {
+            Some(json) => {
+                ctx.copy_text(json);
+                true
+            }
+            None => false,
+        }
     }
 
     fn edit_with(&mut self, idx: usize) {
@@ -1160,13 +1468,19 @@ impl EditorApp {
             let checker = self.checker.clone();
             let bg = background_color();
             let tool = self.tool.clone();
-            let external = match &tool {
-                ToolId::External(id) => self.ext_tools.iter_mut().find(|t| t.id() == id),
+            let active = self.tabs.active_id();
+            let fx = self.fx.as_mut().filter(|f| Some(f.doc) == active);
+            let external: Option<&mut dyn CanvasTool> = match (fx, &tool) {
+                (Some(f), _) => Some(f as &mut dyn CanvasTool),
+                (None, ToolId::External(id)) => {
+                    self.ext_tools.iter_mut().find(|t| t.id() == id).map(|b| &mut **b as &mut dyn CanvasTool)
+                }
                 _ => None,
             };
             if let Some(doc) = self.tabs.active_mut() {
                 let cx = CanvasCtx { tool: &tool, external, space_down: space, background: bg, checker: &checker };
                 let out = canvas::show(ui, doc, &mut self.canvas, cx);
+                annot::with_state(|s| s.text_edit_ui(ui.ctx(), doc));
                 self.hover_px = out.hover_px;
                 if out.painted {
                     if let Some(q) = doc.opened_qpc.take() {
@@ -1318,15 +1632,152 @@ impl EditorApp {
     }
 }
 
+// ---------------------------------------------------------------------- integration panels
+
+impl EditorApp {
+    /// The draw properties bar (under the ribbon) while a draw tool is active or
+    /// annotations are selected.
+    fn props_bar(&mut self, ctx: &egui::Context) {
+        if self.tabs.active().is_none() {
+            return;
+        }
+        let tool = self.draw_tool();
+        let idle_select = tool == Some(crate::draw::Tool::Select);
+        if (tool.is_none() || idle_select) && !self.cmd_state.has_objects {
+            return;
+        }
+        let pal = self.pal;
+        let hwnd = self.hwnd;
+        let frame = egui::Frame::new()
+            .fill(pal.bar)
+            .inner_margin(Margin { left: 10, right: 10, top: 4, bottom: 5 })
+            .stroke(Stroke::new(1.0_f32, pal.border));
+        egui::TopBottomPanel::top("draw-props").frame(frame).show_separator_line(false).show(ctx, |ui| {
+            let doc = self.tabs.active_mut();
+            annot::with_state(|s| annot::properties_bar(ui, s, doc, tool, &pal, hwnd));
+        });
+    }
+
+    /// The left tool palette.
+    fn draw_palette(&mut self, ctx: &egui::Context) {
+        if self.tabs.active().is_none() || annot::with_state(|s| s.palette_hidden) {
+            return;
+        }
+        let enabled = !self.cmd_state.busy;
+        match annot::palette_panel(ctx, &self.pal, self.draw_tool(), enabled) {
+            Some(annot::PaletteAction::Select(t)) => {
+                self.actions.push(Action::Tool(ToolId::External(annot::tool_cmd_id(t))));
+            }
+            Some(annot::PaletteAction::SetDefault(t)) => settings::update(|s| s.draw.default_tool = t),
+            None => {}
+        }
+    }
+
+    /// Dialogs the draw tools asked for (insert image).
+    fn draw_requests(&mut self) {
+        let reqs = annot::with_state(|s| std::mem::take(&mut s.requests));
+        for r in reqs {
+            match r {
+                annot::Request::InsertImage { doc, at } => {
+                    let folder = default_folder();
+                    let files = dialogs::open_files(
+                        self.hwnd,
+                        Some(&folder),
+                        &t("editor-filter-images"),
+                        &t("editor-filter-all"),
+                    );
+                    if let Some(p) = files.into_iter().next() {
+                        self.jobs.load_picture(doc, p, at);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Settings, Tools dialogs, interactive effects and the video editor hook.
+    fn hosted_windows(&mut self, ctx: &egui::Context) {
+        self.settings_win.ui(ctx);
+        if self.settings_win.is_open() && !self.settings_icon_done {
+            self.settings_icon_done = window::set_icon_by_title(&t("settings-title"));
+            if !self.settings_icon_done {
+                ctx.request_repaint_after(Duration::from_millis(50));
+            }
+        }
+        self.video.ui(ctx);
+        for ev in self.tools_dlg.ui(ctx, self.hwnd) {
+            match ev {
+                ToolsEvent::NewTab { image, title } => {
+                    let id = self.tabs.next_id();
+                    self.push_doc(Document::new(id, image, title, None, None), None);
+                }
+                ToolsEvent::Toast { text, error } => self.toast(text, error),
+            }
+        }
+        let Some(fx) = self.fx.as_mut() else { return };
+        if !self.tabs.docs.iter().any(|d| d.id == fx.doc) {
+            self.fx = None;
+            return;
+        }
+        match fx.panel(ctx, self.hwnd) {
+            SessionOutcome::Open => {}
+            SessionOutcome::Cancel => self.fx = None,
+            SessionOutcome::Apply { name, run } => {
+                let doc = fx.doc;
+                self.fx = None;
+                if let Some(d) = self.tabs.get_mut(doc) {
+                    let source = d.image.clone();
+                    self.applying = Some(doc);
+                    let apply: super::effects::ApplyFn = Arc::new(move |img, _, _| run(img));
+                    self.jobs.effect(
+                        doc,
+                        name,
+                        source,
+                        EffectTarget::Whole,
+                        apply,
+                        Default::default(),
+                        background_color(),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Base pixels, annotations and metadata for a project save.
+fn project_data(d: &Document) -> Option<super::jobs::ProjectData> {
+    let base = d.export_job(false).base;
+    let objects = annot::layer::layer(d).map(|l| l.objects().to_vec()).unwrap_or_default();
+    let source = d.path.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "capture".into());
+    let mut meta = crate::draw::Meta::new(&source, &d.title);
+    meta.width = base.width;
+    meta.height = base.height;
+    Some(super::jobs::ProjectData { base, objects, meta })
+}
+
+/// Dark visuals: the Settings theme (System follows Windows).
+pub(super) fn want_dark() -> bool {
+    match settings::get().general.theme {
+        settings::Theme::Dark => true,
+        settings::Theme::Light => false,
+        settings::Theme::System => win::system_dark_mode(),
+    }
+}
+
 impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.bench_presented();
         self.drain_messages(ctx);
+        if self.hide_frames > 0 && !self.visible {
+            self.hide_frames -= 1;
+            window::hide(self.hwnd);
+            ctx.request_repaint();
+        }
         self.poll_jobs(ctx);
         self.refresh_registry();
         self.compute_cmd_state();
         self.handle_close_request(ctx);
-        let overlay_open = self.modal.is_some() || self.palette.is_some() || self.effect_dialog.is_some();
+        let overlay_open =
+            self.modal.is_some() || self.palette.is_some() || self.effect_dialog.is_some() || self.fx.is_some();
         if !overlay_open {
             self.shortcuts(ctx);
             self.handle_drops(ctx);
@@ -1339,13 +1790,17 @@ impl eframe::App for EditorApp {
         }
         self.menu_bar(ctx);
         self.ribbon(ctx);
+        self.props_bar(ctx);
         self.workspace_strip(ctx);
         self.tab_strip(ctx);
         self.status_bar(ctx);
+        self.draw_palette(ctx);
         self.central(ctx);
+        self.draw_requests();
         self.update_stats(ctx);
         self.modals(ctx);
         self.effect_dialog_ui(ctx);
+        self.hosted_windows(ctx);
         self.palette_ui(ctx);
         self.toasts(ctx);
         self.process_actions(ctx);

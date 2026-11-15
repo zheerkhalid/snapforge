@@ -59,6 +59,11 @@ pub enum ParamKind {
         options: Vec<String>,
         default: usize,
     },
+    /// Free text (captions, watermarks).
+    Text {
+        default: String,
+        multiline: bool,
+    },
 }
 
 impl ParamKind {
@@ -69,6 +74,7 @@ impl ParamKind {
             ParamKind::Bool { default } => ParamValue::Bool(*default),
             ParamKind::Color { default, .. } => ParamValue::Color(*default),
             ParamKind::Choice { default, .. } => ParamValue::Choice(*default),
+            ParamKind::Text { default, .. } => ParamValue::Text(default.clone()),
         }
     }
 }
@@ -107,6 +113,9 @@ impl ParamDef {
     pub fn choice(id: &'static str, label: impl Into<String>, options: &[&str], default: usize) -> Self {
         Self::new(id, label, ParamKind::Choice { options: options.iter().map(|s| s.to_string()).collect(), default })
     }
+    pub fn text(id: &'static str, label: impl Into<String>, default: &str, multiline: bool) -> Self {
+        Self::new(id, label, ParamKind::Text { default: default.to_string(), multiline })
+    }
     fn new(id: &'static str, label: impl Into<String>, kind: ParamKind) -> Self {
         Self { id, label: label.into(), kind, advanced: false, tooltip: None }
     }
@@ -128,13 +137,14 @@ impl ParamDef {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParamValue {
     Float(f32),
     Int(i32),
     Bool(bool),
     Color([u8; 4]),
     Choice(usize),
+    Text(String),
 }
 
 /// Parameter values by id. Getters fall back to a neutral value if the id is missing
@@ -178,6 +188,12 @@ impl ParamValues {
         match self.0.get(id) {
             Some(ParamValue::Choice(v)) => *v,
             _ => 0,
+        }
+    }
+    pub fn text(&self, id: &str) -> String {
+        match self.0.get(id) {
+            Some(ParamValue::Text(v)) => v.clone(),
+            _ => String::new(),
         }
     }
 }
@@ -538,6 +554,7 @@ mod tests {
             ParamDef::bool("b", "B", true),
             ParamDef::color("c", "C", [1, 2, 3, 4], true),
             ParamDef::choice("k", "K", &["a", "b"], 1),
+            ParamDef::text("t", "T", "hello", false),
         ];
         let v = ParamValues::defaults(&defs);
         assert_eq!(v.f32("r"), 2.5);
@@ -545,6 +562,8 @@ mod tests {
         assert!(v.bool("b"));
         assert_eq!(v.color("c"), [1, 2, 3, 4]);
         assert_eq!(v.choice("k"), 1);
+        assert_eq!(v.text("t"), "hello");
+        assert_eq!(v.text("k"), "");
         // Missing or mistyped ids never panic.
         assert_eq!(v.f32("missing"), 0.0);
         assert!(!v.bool("r"));

@@ -10,21 +10,30 @@ use super::selection::CanvasMap;
 use crate::app::{post, AppCommand, ToolWindow};
 use crate::common::Image;
 use eframe::egui;
+use std::any::Any;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+/// Renders an annotation layer onto a base image (runs on worker threads).
+pub type Flattener = Arc<dyn Fn(&Image) -> Image + Send + Sync>;
 
 /// An annotation layer attached to a document ([`Document::overlay`]). The editor paints
 /// it above the pixels, flattens it for save / copy, and forwards undo / redo of the
 /// [`super::history::StepKind::Overlay`] markers the layer records with
 /// [`Document::record_overlay_step`].
 pub trait DocOverlay: Send {
-    /// Paint the objects. `map` converts image coordinates to screen points.
-    fn paint(&mut self, ctx: &egui::Context, painter: &egui::Painter, map: &CanvasMap);
+    /// Paint the objects. `map` converts image coordinates to screen points; `base` is the
+    /// document's current pixels (magnifiers, highlighters and raster objects read them).
+    fn paint(&mut self, ctx: &egui::Context, painter: &egui::Painter, map: &CanvasMap, base: &Arc<Image>);
     /// The image with the objects rendered on top.
     fn flatten(&self, base: &Image) -> Image;
+    /// A detached flattener for worker threads (save, copy, print), `None` when empty.
+    fn flattener(&self) -> Option<Flattener>;
     fn undo(&mut self);
     fn redo(&mut self);
     fn is_empty(&self) -> bool;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Pointer state handed to a [`CanvasTool`], in image coordinates.
@@ -39,6 +48,12 @@ pub struct ToolInput {
     pub released: bool,
     pub double_clicked: bool,
     pub modifiers: egui::Modifiers,
+    /// Secondary (right) button clicked over the canvas this frame.
+    pub secondary_clicked: bool,
+    /// Vertical wheel movement in points this frame (tools that [`CanvasTool::wants_wheel`]).
+    pub scroll: f32,
+    /// The pointer is over the canvas.
+    pub hovered: bool,
 }
 
 /// A tool that works on the canvas (Phase 3 draw tools register these). The built-in
@@ -48,7 +63,7 @@ pub trait CanvasTool: Send {
     fn id(&self) -> &str;
     fn label(&self) -> String;
     /// A single glyph shown on the toolbar.
-    fn icon(&self) -> &str;
+    fn icon(&self) -> &'static str;
     /// Shortcut text, e.g. `"A"` or `"Ctrl+Shift+A"` (parsed like menu shortcuts).
     fn shortcut(&self) -> Option<&str> {
         None
@@ -64,6 +79,14 @@ pub trait CanvasTool: Send {
     fn options_ui(&mut self, _ui: &mut egui::Ui) {}
     /// The tool was switched away from (finish pending edits).
     fn deactivate(&mut self, _doc: &mut Document) {}
+    /// The plain mouse wheel goes to the tool (e.g. brush size) instead of scrolling.
+    fn wants_wheel(&self) -> bool {
+        false
+    }
+    /// Listed in the ribbon's tool group (draw tools have their own palette instead).
+    fn on_ribbon(&self) -> bool {
+        true
+    }
 }
 
 /// What a Tools-menu command gets: the open documents of the current workspace.

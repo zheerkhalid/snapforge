@@ -61,7 +61,7 @@ impl CanvasState {
 /// Per-frame inputs from the app.
 pub struct CanvasCtx<'a> {
     pub tool: &'a ToolId,
-    pub external: Option<&'a mut Box<dyn CanvasTool>>,
+    pub external: Option<&'a mut dyn CanvasTool>,
     /// Space is held (temporary pan).
     pub space_down: bool,
     /// Premultiplied BGRA fill for moved pixels.
@@ -89,12 +89,17 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
     let mut out = CanvasOutput { painted: false, hover_px: None, edited: None };
 
     // ---- zoom / scroll
+    let tool_wheel = cx.external.as_ref().is_some_and(|t| t.wants_wheel());
+    let mut tool_scroll = 0.0;
     if resp.hovered() {
         let (zoom, scroll, pointer) = ctx.input(|i| (i.zoom_delta(), i.smooth_scroll_delta, i.pointer.hover_pos()));
         if zoom != 1.0 {
             let anchor = pointer.map(|p| (p - rect.min) * ppp).unwrap_or(vec2(view_px[0], view_px[1]) / 2.0);
             let z = doc.view.zoom * zoom;
             doc.view.zoom_around(z, [anchor.x, anchor.y], img_px, view_px);
+        } else if tool_wheel {
+            // Raw wheel notches, not the smoothed delta: one notch = one step.
+            tool_scroll = ctx.input(|i| i.raw_scroll_delta.y);
         } else if scroll != egui::Vec2::ZERO {
             let d = scroll * ppp;
             doc.view.pan([d.x, d.y], img_px, view_px);
@@ -113,7 +118,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
 
     // ---- input
     let pan_tool = *cx.tool == ToolId::Pan;
-    let handles_on = !matches!(cx.tool, ToolId::External(_)) && doc.floating.is_none() && !doc.busy();
+    let handles_on =
+        cx.external.is_none() && !matches!(cx.tool, ToolId::External(_)) && doc.floating.is_none() && !doc.busy();
     let hovered_edge = if handles_on && !st.is_dragging() { pointer.and_then(|p| edge_at(img_rect, p)) } else { None };
     let mut external = cx.external;
     handle_input(
@@ -128,6 +134,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
         cx.tool,
         cx.background,
         &mut external,
+        tool_scroll,
         &mut out,
     );
 
@@ -186,7 +193,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
 
     paint_floating(&ctx, &painter, doc, st, &map);
     if let Some(o) = doc.overlay.as_mut() {
-        o.paint(&ctx, &painter, &map);
+        o.paint(&ctx, &painter, &map, &doc.image);
     }
 
     // Selection outline (marching ants).
@@ -317,19 +324,21 @@ fn handle_input(
     hovered_edge: Option<Edge>,
     tool: &ToolId,
     background: [u8; 4],
-    external: &mut Option<&mut Box<dyn CanvasTool>>,
+    external: &mut Option<&mut dyn CanvasTool>,
+    tool_scroll: f32,
     out: &mut CanvasOutput,
 ) {
     let ppp = ctx.pixels_per_point();
     let img_px = doc.size();
     let view_px = [resp.rect.width() * ppp, resp.rect.height() * ppp];
-    let (pointer, press_origin, mods, primary_down, primary_released) = ctx.input(|i| {
+    let (pointer, press_origin, mods, primary_down, primary_released, primary_pressed) = ctx.input(|i| {
         (
             i.pointer.interact_pos(),
             i.pointer.press_origin(),
             i.modifiers,
             i.pointer.primary_down(),
             i.pointer.primary_released(),
+            i.pointer.primary_pressed(),
         )
     });
 
@@ -378,11 +387,14 @@ fn handle_input(
             let input = ToolInput {
                 map: *map,
                 pos: pointer.map(|p| map.to_image([p.x, p.y])),
-                pressed: resp.drag_started_by(PointerButton::Primary) || resp.clicked(),
-                down: primary_down && resp.is_pointer_button_down_on(),
+                pressed: primary_pressed && resp.hovered(),
+                down: primary_down && (resp.is_pointer_button_down_on() || matches!(st.drag, Drag::Tool)),
                 released: primary_released,
                 double_clicked: resp.double_clicked(),
                 modifiers: mods,
+                secondary_clicked: resp.secondary_clicked(),
+                scroll: tool_scroll,
+                hovered: resp.hovered(),
             };
             if resp.hovered() || matches!(st.drag, Drag::Tool) {
                 t.on_input(doc, &input);

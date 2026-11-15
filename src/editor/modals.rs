@@ -312,8 +312,8 @@ impl EditorApp {
                     if let Some(d) = self.tabs.get_mut(*id) {
                         if !d.saving {
                             d.saving = true;
-                            let img = d.composited();
-                            self.jobs.save(*id, img, path, d.revision, false);
+                            let img = d.export_job(false);
+                            self.jobs.save(*id, img, path, d.revision, false, None);
                         }
                     }
                 }

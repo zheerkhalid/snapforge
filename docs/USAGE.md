@@ -86,3 +86,32 @@ If SnapForge is already running, the command is forwarded to it.
 - Logs are kept in the `logs` subfolder.
 - FTP passwords are encrypted with Windows DPAPI.
 - `SnapForge.exe --uninstall-cleanup` removes the settings, the logs and the autostart entry.
+
+## Draw tools
+
+The editor's left palette holds every drawing tool. Annotations stay editable objects on top of the picture: select one to move it, drag its handles (Shift keeps the aspect ratio or snaps angles, Alt resizes from the centre), double-click text to edit it in place. The bar under the toolbar shows the properties of the active tool or of the selected objects (colors with swatches and an eye dropper, right-click a color box to pick from the screen; width, dash, arrowheads, line style, font with live previews up to 200 pt, shadow and outline, box and tail, saved style presets, align and order).
+
+| Key | Tool | Key | Tool |
+|---|---|---|---|
+| `F2` | Select / move | `Shift+F2` | Callout |
+| `F3` | Text | `Shift+F3` | Curve |
+| `F4` | Arrow | `Shift+F4` | Polyline |
+| `F5` | Line | `Shift+F5` | L-line |
+| `F6` | Rectangle | `Shift+F6` | Polygon |
+| `F7` | Ellipse | `Shift+F7` | Bracket |
+| `F8` | Highlighter | `Shift+F8` | Line highlighter (hold Ctrl for a straight stroke) |
+| `F9` | Step stamp | `Shift+F9` | Magnifier |
+| `F10` | Blur | `Shift+F10` | Pixelate |
+| `F11` | Eraser (mouse wheel changes the size) | `Shift+F11` | Fill |
+| `F12` | Pencil | `Shift+F12` | Insert image |
+| `Ctrl+F2` | Emoji | `Ctrl+F3` | 3D arrow |
+| `Ctrl+F5` | Mouse pointer | | |
+
+- `Tab` / `Shift+Tab` cycle through the tools in palette order. `F1` lists every shortcut.
+- Right-click a palette tool and choose **Set as Default Tool**: the **Draw** destination opens captures with it.
+- Arrow keys move the selected annotations (with Shift, 10 px). `Ctrl+J` duplicates, `Del` deletes, `Ctrl+C` / `Ctrl+V` copy and paste them, `Ctrl+A` selects them all. Polylines and polygons end with a double-click, Enter or Esc.
+- Pixel edits (effects, crop) and annotation edits share one undo history (`Ctrl+Z` / `Ctrl+Y`).
+- **File ▸ Save Project (.sfcap)** (`Ctrl+Alt+S`) keeps the annotations editable; open a project with File ▸ Open or by dropping it on the editor. When you save an annotated image, an editable `.sfcap` copy is saved next to it (setting `draw.autosave_project`, on by default; if that folder is read-only it goes to the `autosave` folder in the settings folder).
+- Save, Copy, Print, Pin and *Continue to …* use the flattened picture; the original pixels are kept separately while you edit.
+
+Image ▸ Resize to 25 / 50 / 75 / 200 % is on `Ctrl+1` … `Ctrl+4`. Effects apply to the selection when there is one. Make Color Transparent, Spotlight, Remove / Insert Strip and Watermark work directly on the canvas; the Clone Stamp tool takes its source from an Alt+click.

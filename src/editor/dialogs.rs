@@ -261,6 +261,86 @@ pub fn save_file(
     }
 }
 
+/// Multi-select open dialog with custom filters (`(label, "*.a;*.b")`). Empty when cancelled.
+pub fn open_files_with(owner: isize, folder: Option<&Path>, items: &[(String, String)], multi: bool) -> Vec<PathBuf> {
+    ensure_com();
+    let f = filters(items);
+    // SAFETY: standard COM usage; all pointers passed in outlive the calls.
+    unsafe {
+        let dlg: IFileOpenDialog = match CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) {
+            Ok(d) => d,
+            Err(e) => {
+                log::error!("editor: cannot create the open dialog: {e}");
+                return Vec::new();
+            }
+        };
+        let opts = dlg.GetOptions().unwrap_or_default();
+        let multi_flag = if multi { FOS_ALLOWMULTISELECT } else { Default::default() };
+        let _ = dlg.SetOptions(opts | multi_flag | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM);
+        if !f.specs.is_empty() {
+            let _ = dlg.SetFileTypes(&f.specs);
+            let _ = dlg.SetFileTypeIndex(1);
+        }
+        if let Ok(base) = dlg.cast::<IFileDialog>() {
+            set_folder(&base, folder);
+            add_output_place(&base);
+        }
+        if let Err(e) = dlg.Show(hwnd_from_isize(owner)) {
+            log_show_error(&e);
+            return Vec::new();
+        }
+        let Ok(results) = dlg.GetResults() else { return Vec::new() };
+        let n = results.GetCount().unwrap_or(0);
+        (0..n).filter_map(|i| results.GetItemAt(i).ok()).filter_map(|it| shell_item_path(&it)).collect()
+    }
+}
+
+/// Save dialog with custom filters. `default_ext` (without dot) is appended when the user
+/// types a name without an extension. `None` when cancelled.
+pub fn save_file_with(
+    owner: isize,
+    folder: Option<&Path>,
+    file_name: &str,
+    items: &[(String, String)],
+    default_ext: &str,
+) -> Option<PathBuf> {
+    ensure_com();
+    let f = filters(items);
+    let name = wide(file_name);
+    let ext = wide(default_ext);
+    // SAFETY: standard COM usage; all pointers passed in outlive the calls.
+    unsafe {
+        let dlg: IFileSaveDialog = match CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER) {
+            Ok(d) => d,
+            Err(e) => {
+                log::error!("editor: cannot create the save dialog: {e}");
+                return None;
+            }
+        };
+        let opts = dlg.GetOptions().unwrap_or_default();
+        let _ = dlg.SetOptions(opts | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM);
+        if !f.specs.is_empty() {
+            let _ = dlg.SetFileTypes(&f.specs);
+            let _ = dlg.SetFileTypeIndex(1);
+        }
+        let _ = dlg.SetDefaultExtension(pcwstr(&ext));
+        let _ = dlg.SetFileName(PCWSTR(name.as_ptr()));
+        if let Ok(base) = dlg.cast::<IFileDialog>() {
+            set_folder(&base, folder);
+            add_output_place(&base);
+        }
+        if let Err(e) = dlg.Show(hwnd_from_isize(owner)) {
+            log_show_error(&e);
+            return None;
+        }
+        let path = shell_item_path(&dlg.GetResult().ok()?)?;
+        if path.extension().is_none() && !default_ext.is_empty() {
+            return Some(path.with_extension(default_ext));
+        }
+        Some(path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

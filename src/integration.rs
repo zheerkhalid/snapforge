@@ -1,6 +1,6 @@
 //! Dispatch of Phase 2-6 commands to their modules (UI thread).
 
-use crate::app::{self, AppCommand};
+use crate::app::{self, AppCommand, ToolWindow};
 use crate::i18n::t;
 
 pub fn execute(cmd: AppCommand) {
@@ -24,6 +24,11 @@ pub fn execute(cmd: AppCommand) {
         AppCommand::Record(target) => crate::recorder::select_and_start(target),
         AppCommand::StopRecording => crate::recorder::stop(),
         AppCommand::TogglePauseRecording => crate::recorder::toggle_pause(),
+        AppCommand::OpenSettings | AppCommand::OpenTool(ToolWindow::Settings) => crate::editor::open_settings(),
+        AppCommand::About => crate::editor::open_about(),
+        AppCommand::OpenTool(ToolWindow::CombineImages) => crate::editor::open_combine_images(),
+        AppCommand::OpenTool(ToolWindow::ImagesToPdf) => crate::editor::open_images_to_pdf(),
+        AppCommand::OpenTool(ToolWindow::BatchPrint) => crate::editor::open_batch_print(),
         _ => log::info!("command not available yet"),
     }
 }
