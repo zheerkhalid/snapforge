@@ -70,7 +70,6 @@ struct Dialog {
     hwnd: HWND,
     edit: HWND,
     key: String,
-    mon: MonitorInfo,
     font: HFONT,
     controls: Vec<(HWND, (i32, i32, i32, i32))>,
 }
@@ -111,14 +110,7 @@ pub fn open(m: MonitorInfo) {
     let stored = crate::settings::get().tools.calibration_for(&key);
     let (detected, from_edid) = detected_diagonal(&m);
     let current = stored.unwrap_or(detected);
-    let mut d = Dialog {
-        hwnd,
-        edit: HWND::default(),
-        key,
-        mon: m.clone(),
-        font: wnd::ui_font(9.0, dpi, false),
-        controls: Vec::new(),
-    };
+    let mut d = Dialog { hwnd, edit: HWND::default(), key, font: wnd::ui_font(9.0, dpi, false), controls: Vec::new() };
     let t = crate::i18n::t;
     d.child(
         "STATIC",

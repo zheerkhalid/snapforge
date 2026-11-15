@@ -1,6 +1,8 @@
 //! Magnifier loupe: placement next to the cursor and the zoomed pixel grid.
 
-use crate::common::{Image, Point, Rect};
+#[cfg(test)]
+use crate::common::Image;
+use crate::common::{Point, Rect};
 
 /// Source pixels shown per side (odd, so there is a centre pixel).
 pub const CELLS: i32 = 15;
@@ -36,6 +38,7 @@ pub struct Src<'a> {
 }
 
 impl<'a> Src<'a> {
+    #[cfg(test)]
     pub fn of(img: &'a Image) -> Self {
         Self { data: &img.data, width: img.width, height: img.height }
     }

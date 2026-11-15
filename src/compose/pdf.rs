@@ -5,7 +5,9 @@ use crate::common::{Image, Rect};
 use anyhow::{bail, ensure, Context, Result};
 use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect as PdfRect, Ref, TextStr};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -103,6 +105,9 @@ impl Default for PdfOptions {
 /// An input: a file to load, or an image already in memory.
 #[derive(Debug, Clone)]
 pub enum PdfSource {
+    /// Loaded when its page is written (the Tools dialog decodes files itself, to skip
+    /// unreadable ones and report progress per image).
+    #[cfg(test)]
     Path(PathBuf),
     Image(Image),
 }
@@ -235,6 +240,7 @@ pub fn images_to_pdf_bytes(sources: &[PdfSource], opts: &PdfOptions) -> Result<(
     let mut page_ids = Vec::new();
     for (i, src) in sources.iter().enumerate() {
         let img = match src {
+            #[cfg(test)]
             PdfSource::Path(p) => crate::output::save::load_image(p)?,
             PdfSource::Image(img) => img.clone(),
         };

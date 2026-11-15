@@ -355,23 +355,6 @@ fn horizontal_noise_with_sticky_left_column() {
 }
 
 #[test]
-fn grid_2d() {
-    let page = noise_page(600, 900, 81);
-    let (vw, vh) = (200u32, 300u32);
-    let xs = [0u32, 150, 300, 400];
-    let ys = [0u32, 200, 400, 600];
-    let mut g = GridStitcher::new(StitchOptions::default());
-    for &x in &xs {
-        for &y in &ys {
-            let f = page.crop(Rect::new(x as i32, y as i32, vw as i32, vh as i32));
-            assert!(matches!(g.push(&f), PushResult::Added(_)));
-        }
-        g.next_column();
-    }
-    assert_eq!(g.finish(), page);
-}
-
-#[test]
 fn join_columns_crops_to_shortest() {
     let page = noise_page(300, 200, 83);
     let a = hcrop(&page, 0, 200);

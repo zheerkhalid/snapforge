@@ -4,8 +4,6 @@ use eframe::egui::{self, vec2, Color32, CornerRadius, Margin, Stroke, Visuals};
 use std::sync::Arc;
 
 pub const ACCENT: Color32 = Color32::from_rgb(0x4F, 0x6B, 0xFF);
-pub const ACCENT_HOVER: Color32 = Color32::from_rgb(0x63, 0x7D, 0xFF);
-pub const ACCENT_ACTIVE: Color32 = Color32::from_rgb(0x3F, 0x58, 0xE0);
 const DIRTY_LIGHT: Color32 = Color32::from_rgb(0xE0, 0x8A, 0x00);
 const DIRTY_DARK: Color32 = Color32::from_rgb(0xFF, 0xB0, 0x40);
 

@@ -89,13 +89,6 @@ impl DrawLayer {
         }
     }
 
-    /// Base with the raster objects applied.
-    pub fn effective(&mut self, base: &Arc<Image>) -> Image {
-        self.sync_base(base);
-        let opts = RenderOptions::default();
-        self.raster.get(&self.doc.base, self.doc.base_rev, &self.doc.objects, &opts).clone()
-    }
-
     fn render_view(&mut self, rect: Rect, size: (u32, u32), zoom: f32) -> Image {
         let opts = RenderOptions { time_ms: None, hidden: self.hidden.clone() };
         let has_raster = self.doc.objects.iter().any(|o| o.is_raster());

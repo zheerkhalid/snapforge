@@ -7,8 +7,8 @@
 use super::gdi;
 use crate::common::Image;
 use tiny_skia::{
-    Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, PixmapRef,
-    Stroke, Transform,
+    Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, PixmapMut, PixmapPaint, PixmapRef, Stroke,
+    Transform,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -167,13 +167,6 @@ fn ink_center(m: &gdi::Mask) -> (f32, f32) {
     ((x0 + x1 + 1) as f32 / 2.0, (y0 + y1 + 1) as f32 / 2.0)
 }
 
-/// A pixmap the size of `img` holding a copy (for previews in tests).
-pub fn to_pixmap(img: &Image) -> Option<Pixmap> {
-    let mut p = Pixmap::new(img.width, img.height)?;
-    p.data_mut().copy_from_slice(&img.data);
-    Some(p)
-}
-
 /// One undo step: the image before an edit, the step number then, and how far the canvas
 /// origin moved (image pixels) so undo can move the pin back.
 pub struct Snap {
@@ -208,6 +201,7 @@ impl History {
         Some(s)
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.snaps.len()
     }

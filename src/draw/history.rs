@@ -86,12 +86,15 @@ impl ObjectsDiff {
 #[derive(Debug, Clone)]
 pub enum Edit {
     Objects(ObjectsDiff),
-    /// The base image was replaced (pixel edit).
+    /// The base image was replaced (pixel edit). The editor keeps pixel edits in its own
+    /// history (DECISIONS #86); these two are exercised by the tests only.
+    #[cfg(test)]
     Base {
         before: Arc<Image>,
         after: Arc<Image>,
     },
     /// Several edits as one step (e.g. a crop that also shifts annotations).
+    #[cfg(test)]
     Batch(Vec<Edit>),
 }
 
@@ -103,7 +106,9 @@ impl Edit {
     fn undo(&self, doc: &mut Document) {
         match self {
             Edit::Objects(d) => d.undo(&mut doc.objects),
+            #[cfg(test)]
             Edit::Base { before, .. } => doc.set_base(before.clone()),
+            #[cfg(test)]
             Edit::Batch(v) => v.iter().rev().for_each(|e| e.undo(doc)),
         }
     }
@@ -111,7 +116,9 @@ impl Edit {
     fn redo(&self, doc: &mut Document) {
         match self {
             Edit::Objects(d) => d.redo(&mut doc.objects),
+            #[cfg(test)]
             Edit::Base { after, .. } => doc.set_base(after.clone()),
+            #[cfg(test)]
             Edit::Batch(v) => v.iter().for_each(|e| e.redo(doc)),
         }
     }
@@ -122,17 +129,24 @@ impl Edit {
 pub struct History {
     undo: Vec<Edit>,
     redo: Vec<Edit>,
-    /// Undo depth at the last save (`None` = the saved state is no longer reachable).
+    /// Undo depth at the last save (`None` = the saved state is no longer reachable). The
+    /// editor tracks "dirty" per document (DECISIONS #65); this copy is kept for the tests.
+    #[cfg(test)]
     saved_at: Option<usize>,
 }
 
 impl History {
     pub fn new() -> Self {
-        Self { saved_at: Some(0), ..Default::default() }
+        Self {
+            #[cfg(test)]
+            saved_at: Some(0),
+            ..Default::default()
+        }
     }
 
     /// Record an already-applied edit. Clears the redo stack.
     pub fn record(&mut self, edit: Edit) {
+        #[cfg(test)]
         if let Some(s) = self.saved_at {
             if s > self.undo.len() {
                 self.saved_at = None;
@@ -154,24 +168,19 @@ impl History {
     }
 
     /// Record a base-image change.
+    #[cfg(test)]
     pub fn record_base(&mut self, before: Arc<Image>, after: Arc<Image>) {
         self.record(Edit::Base { before, after });
     }
 
-    pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
-    }
-
+    #[cfg(test)]
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
 
+    #[cfg(test)]
     pub fn undo_len(&self) -> usize {
         self.undo.len()
-    }
-
-    pub fn redo_len(&self) -> usize {
-        self.redo.len()
     }
 
     pub fn undo(&mut self, doc: &mut Document) -> bool {
@@ -188,16 +197,14 @@ impl History {
         true
     }
 
-    pub fn clear(&mut self) {
-        *self = Self::new();
-    }
-
     /// Remember the current state as saved.
+    #[cfg(test)]
     pub fn mark_saved(&mut self) {
         self.saved_at = Some(self.undo.len());
     }
 
     /// True if the document differs from the last saved state.
+    #[cfg(test)]
     pub fn is_dirty(&self) -> bool {
         self.saved_at != Some(self.undo.len())
     }

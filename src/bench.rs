@@ -114,7 +114,34 @@ pub fn run_parent() -> i32 {
     }
     let size_mb = std::fs::metadata(&exe).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
     row("Portable EXE size", format!("{size_mb:.2} MB"), "< 20 MB", Some(size_mb < 20.0));
-    row("1080p60 recording CPU (hardware encoder)", "n/a until Phase 4".into(), "< 10 %", None);
+    match get("REC60") {
+        Some(v) => {
+            let f: Vec<&str> = v.split_whitespace().collect();
+            let total: f64 = f.first().and_then(|x| x.parse().ok()).unwrap_or(f64::NAN);
+            let core: f64 = f.get(1).and_then(|x| x.parse().ok()).unwrap_or(f64::NAN);
+            let dropped: u64 = f.get(2).and_then(|x| x.parse().ok()).unwrap_or(u64::MAX);
+            let frames = f.get(3).copied().unwrap_or("?");
+            let size = f.get(4).copied().unwrap_or("?");
+            let enc = f.get(5).copied().unwrap_or("?");
+            let dup = f.get(7).copied().unwrap_or("?");
+            row(
+                &format!("{size}@60 recording CPU ({enc} encoder)"),
+                format!("{total:.1} % ({core:.0} % of a core)"),
+                "< 10 %",
+                Some(total < 10.0),
+            );
+            row(
+                "Recording dropped frames (5 s at 60 fps)",
+                format!("{dropped} of {frames} ({dup} repeats)"),
+                "0",
+                Some(dropped == 0),
+            );
+        }
+        None => {
+            let why = get("REC60_ERR").unwrap_or_else(|| "no data".into());
+            row("1080p60 recording CPU", format!("failed: {why}"), "< 10 %", Some(false));
+        }
+    }
     if let Some(ms) = num("STITCH20") {
         row(
             "Scrolling capture, 20 screens",
@@ -223,6 +250,73 @@ fn hide_editor_window() {
     }
 }
 
+/// Kernel + user CPU time of this process, in 100 ns units.
+fn process_cpu_100ns() -> u64 {
+    use windows::Win32::Foundation::FILETIME;
+    use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+    let (mut c, mut e, mut k, mut u) =
+        (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+    // SAFETY: valid out pointers for our own process.
+    unsafe {
+        let _ = GetProcessTimes(GetCurrentProcess(), &mut c, &mut e, &mut k, &mut u);
+    }
+    let f = |t: FILETIME| ((t.dwHighDateTime as u64) << 32) | t.dwLowDateTime as u64;
+    f(k) + f(u)
+}
+
+fn logical_cpus() -> u32 {
+    std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1)
+}
+
+/// CPU use while recording: `cpu_100ns` over `wall_secs`, as (% of all logical CPUs,
+/// % of one core).
+pub fn cpu_percent(cpu_100ns: u64, wall_secs: f64, cpus: u32) -> (f64, f64) {
+    if wall_secs <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let core = cpu_100ns as f64 / 1e7 / wall_secs * 100.0;
+    (core / cpus.max(1) as f64, core)
+}
+
+/// Record 5 s of the primary monitor (at most 1920×1080) at 60 fps without audio, the same
+/// way a user recording runs (control bar hidden). Returns
+/// `"<% total> <% one core> <dropped> <frames> <WxH> <hw|sw> <backend> <duplicated>"`: dropped
+/// and frames as read while recording, duplicated (repeats of an unchanged screen) at the end.
+fn bench_recording(monitor: crate::common::Rect) -> anyhow::Result<String> {
+    use crate::recorder::{self, Area, StartOptions};
+    let rect = crate::common::Rect::new(monitor.x, monitor.y, monitor.w.min(1920), monitor.h.min(1080));
+    let rs = crate::settings::recorder::RecorderSettings {
+        fps: 60,
+        record_system_audio: false,
+        record_microphone: false,
+        ..crate::settings::get().recorder.clone()
+    };
+    let out = std::env::temp_dir().join(format!("SnapForge-bench-rec-{}.mp4", std::process::id()));
+    let opts = StartOptions { out_path: Some(out.clone()), headless: true, settings: Some(rs), sleep_after: false };
+    recorder::start_with(Some(Area::Rect(rect)), opts)?;
+    // Let the pipeline settle (encoder start, first frames) before measuring.
+    std::thread::sleep(Duration::from_millis(500));
+    let (cpu0, t0) = (process_cpu_100ns(), Instant::now());
+    std::thread::sleep(Duration::from_secs(5));
+    let (cpu1, wall) = (process_cpu_100ns(), t0.elapsed().as_secs_f64());
+    let status = recorder::status();
+    let finished = recorder::stop_blocking();
+    let _ = std::fs::remove_file(&out);
+    let f = finished?;
+    let _ = std::fs::remove_file(&f.path);
+    let (total, core) = cpu_percent(cpu1.saturating_sub(cpu0), wall, logical_cpus());
+    Ok(format!(
+        "{total:.1} {core:.1} {} {} {}x{} {} {} {}",
+        status.dropped,
+        status.frames,
+        rect.w & !1,
+        rect.h & !1,
+        if f.hardware_encoder { "hw" } else { "sw" },
+        f.backend,
+        f.duplicated
+    ))
+}
+
 /// Called on the UI thread right before the message loop starts.
 pub fn start_child() {
     emit("READY", format!("{:.1}", ms_since_process_start()));
@@ -284,6 +378,23 @@ fn child_script() {
     }
 
     emit("STITCH20", format!("{:.1}", crate::capture::stitch::bench_synthetic(20)));
+    match bench_recording(rect) {
+        Ok(v) => emit("REC60", v),
+        Err(e) => emit("REC60_ERR", format!("{e:#}")),
+    }
     emit("DONE", "");
     app::post(AppCommand::Exit);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cpu_percent;
+
+    #[test]
+    fn cpu_share() {
+        // 1 s of CPU over 5 s on 8 logical CPUs: 20 % of a core, 2.5 % of the machine.
+        let (total, core) = cpu_percent(10_000_000, 5.0, 8);
+        assert!((core - 20.0).abs() < 1e-9 && (total - 2.5).abs() < 1e-9);
+        assert_eq!(cpu_percent(5, 0.0, 4), (0.0, 0.0));
+    }
 }

@@ -47,7 +47,9 @@ pub enum Axis {
 pub enum MismatchPolicy {
     /// Append the whole frame after a separator line and keep going.
     AppendWithSeparator,
-    /// Reject the frame; every later push is rejected too.
+    /// Reject the frame; every later push is rejected too. Scrolling capture always
+    /// appends; the policy is kept for the stitcher's tests.
+    #[cfg(test)]
     Stop,
 }
 
@@ -130,10 +132,6 @@ impl Stitcher {
         }
     }
 
-    pub fn axis(&self) -> Axis {
-        self.axis
-    }
-
     /// Frames kept so far (first frame, shifted frames and appended mismatches).
     pub fn frames(&self) -> u32 {
         self.frames
@@ -149,6 +147,7 @@ impl Stitcher {
     }
 
     /// Last detected sticky header and footer sizes (along the scroll axis).
+    #[cfg(test)]
     pub fn sticky(&self) -> (u32, u32) {
         (self.header, self.footer)
     }
@@ -209,6 +208,7 @@ impl Stitcher {
                 PushResult::Added(d as u32)
             }
             Match::None => match self.opts.mismatch {
+                #[cfg(test)]
                 MismatchPolicy::Stop => {
                     self.stopped = true;
                     PushResult::Mismatch { appended: false }
@@ -285,42 +285,6 @@ impl Body {
             out.extend_from_slice(s);
         }
         out
-    }
-}
-
-/// 2D stitching ("Both" direction): each column is stitched vertically, then the
-/// columns are joined horizontally with the same matcher.
-pub struct GridStitcher {
-    opts: StitchOptions,
-    columns: Vec<Image>,
-    current: Stitcher,
-}
-
-impl GridStitcher {
-    pub fn new(opts: StitchOptions) -> Self {
-        Self { opts, columns: Vec::new(), current: Stitcher::with_options(Axis::Vertical, opts) }
-    }
-
-    /// Push a frame of the current column (top to bottom).
-    pub fn push(&mut self, frame: &Image) -> PushResult {
-        self.current.push(frame)
-    }
-
-    pub fn push_hint(&mut self, frame: &Image, hint: Option<u32>) -> PushResult {
-        self.current.push_hint(frame, hint)
-    }
-
-    /// Close the current column; the next push starts a new one (scrolled right).
-    pub fn next_column(&mut self) {
-        let done = std::mem::replace(&mut self.current, Stitcher::with_options(Axis::Vertical, self.opts));
-        if done.frames() > 0 {
-            self.columns.push(done.finish());
-        }
-    }
-
-    pub fn finish(mut self) -> Image {
-        self.next_column();
-        join_columns(&self.columns, self.opts)
     }
 }
 

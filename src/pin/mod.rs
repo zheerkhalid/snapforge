@@ -30,11 +30,13 @@ pub fn pin_image(img: Image, at: Option<Rect>) {
 }
 
 /// Images of all open pins (with their annotations), oldest first.
+#[cfg(test)]
 pub fn pinned_images() -> Vec<Image> {
     window::all().into_iter().filter_map(window::image_of).collect()
 }
 
 /// Number of open pins.
+#[cfg(test)]
 pub fn count() -> usize {
     window::all().len()
 }

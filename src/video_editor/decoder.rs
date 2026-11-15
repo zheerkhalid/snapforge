@@ -94,6 +94,7 @@ impl Decoder {
         self.shared.lock().error.clone()
     }
 
+    #[cfg(test)]
     pub fn info(&self) -> Option<MediaInfo> {
         self.shared.lock().info
     }

@@ -4,6 +4,7 @@
 //! SnapForge.exe --capture region --out clipboard
 //! SnapForge.exe --capture fullscreen --file "C:\shots\screen.png"
 //! SnapForge.exe --open a.png b.jpg
+//! SnapForge.exe --open recording.mp4
 //! ```
 
 use crate::settings::{CaptureMode, Destination};
@@ -41,7 +42,8 @@ CAPTURE:
   --delay <seconds>      wait before capturing (shows a countdown)
 
 OTHER:
-  --open <files...>      open images in the editor
+  --open <files...>      open images or .sfcap projects in the editor, and
+                         .mp4 / .wmv videos or .sfvid projects in the video editor
   --tray                 start in the tray without showing the toolbar
   --toolbar              show the capture toolbar
   --bench                measure and print the performance budgets

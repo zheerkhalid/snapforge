@@ -44,11 +44,8 @@ use video::{Control, EncMsg, Live, Target, VideoParams};
 use wasapi::Shared;
 
 // Public API for the settings window and the "Convert to MP4" tool.
-#[allow(unused_imports)]
-pub use convert::{convert_to_mp4, extract_audio, AudioFormat, ConvertOptions};
-#[allow(unused_imports)]
+pub use convert::{convert_to_mp4, extract_audio, AudioFormat, ConvertOptions, Resize};
 pub use wasapi::{list_inputs as list_audio_inputs, AudioDevice};
-#[allow(unused_imports)]
 pub use webcam::{list_cameras, Camera};
 
 /// What to record, after any selection UI.
@@ -70,7 +67,6 @@ pub enum State {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Status {
-    pub recording: bool,
     pub paused: bool,
     /// Recorded time (pauses excluded).
     pub elapsed_secs: u64,
@@ -146,10 +142,6 @@ pub fn is_recording() -> bool {
     state() != State::Idle
 }
 
-pub fn audio_level() -> (f32, f32) {
-    LEVEL.get()
-}
-
 pub fn status() -> Status {
     let g = SESSION.lock();
     let Ok(g) = g else { return Status::default() };
@@ -157,7 +149,6 @@ pub fn status() -> Status {
     let (elapsed, paused) =
         s.shared.clock.lock().map(|c| (c.media_now(clock::qpc_hns()), c.is_paused())).unwrap_or((0, false));
     Status {
-        recording: true,
         paused,
         elapsed_secs: (elapsed / clock::HNS_PER_SEC).max(0) as u64,
         level: LEVEL.get(),
@@ -460,6 +451,12 @@ fn start_session_inner(area: Option<Area>, opts: StartOptions) -> Result<()> {
     }
 
     let backend = init.as_ref().map(|i| i.backend).unwrap_or("none");
+    if let Some(i) = &init {
+        log::info!(
+            "recorder: capture backend {backend}, frames handed over as {}",
+            if i.gpu_input { "GPU textures" } else { "system memory" }
+        );
+    }
     if let Some((rx, arx)) = queues.take() {
         let devmgr = init.as_mut().and_then(|i| i.devmgr.take());
         match spawn_encoder(enc_cfg, devmgr, rx, arx) {
@@ -752,10 +749,12 @@ pub fn stop() {
     let _ = std::thread::Builder::new().name("rec-finish".into()).spawn(|| match finish() {
         Ok(f) => {
             let open_after = crate::settings::get().recorder.open_after;
-            crate::app::notify(
+            // Clicking the balloon opens the recording in the video editor.
+            let key = if crate::video_editor::accepts(&f.path) { "rec-saved-edit" } else { "rec-saved" };
+            crate::app::notify_file(
                 crate::i18n::t("app-name"),
-                crate::i18n::tf("rec-saved", &[("path", &f.path.display().to_string())]),
-                false,
+                crate::i18n::tf(key, &[("path", &f.path.display().to_string())]),
+                f.path.clone(),
             );
             if open_after {
                 win::reveal_in_explorer(&f.path);
@@ -864,11 +863,8 @@ pub fn recover_pending() {
     let _ = std::thread::Builder::new().name("rec-recover".into()).spawn(|| {
         let _com = mf::ComGuard::mta();
         for p in recover_pending_in(&journal::journal_dir()) {
-            crate::app::notify(
-                crate::i18n::t("app-name"),
-                crate::i18n::tf("rec-recovered", &[("path", &p.display().to_string())]),
-                false,
-            );
+            let text = crate::i18n::tf("rec-recovered", &[("path", &p.display().to_string())]);
+            crate::app::notify_file(crate::i18n::t("app-name"), text, p);
         }
     });
 }

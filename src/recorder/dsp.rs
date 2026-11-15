@@ -224,6 +224,7 @@ impl Track {
         }
     }
 
+    #[cfg(test)]
     pub fn buffered(&self) -> usize {
         self.buf.len()
     }
@@ -246,6 +247,7 @@ impl Default for Agc {
 }
 
 impl Agc {
+    #[cfg(test)]
     pub fn gain(&self) -> f32 {
         self.gain
     }

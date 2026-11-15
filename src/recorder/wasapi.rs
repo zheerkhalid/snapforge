@@ -311,6 +311,7 @@ fn run_stream(source: &Source, input: usize, shared: &Shared, stop: &AtomicBool,
 
 /// Play a sine tone on the default output for `secs` (used by the integration test so
 /// loopback has something to capture).
+#[cfg(test)]
 pub fn play_tone(freq: f32, secs: f32, stop: Arc<AtomicBool>) -> std::thread::JoinHandle<Result<()>> {
     std::thread::spawn(move || -> Result<()> {
         let _com = ComGuard::mta();
@@ -354,14 +355,4 @@ pub fn play_tone(freq: f32, secs: f32, stop: Arc<AtomicBool>) -> std::thread::Jo
         }
         Ok(())
     })
-}
-
-/// Default render device name (diagnostics).
-pub fn default_output_name() -> String {
-    let _com = ComGuard::mta();
-    enumerator()
-        // SAFETY: valid enumerator.
-        .and_then(|e| unsafe { Ok(e.GetDefaultAudioEndpoint(eRender, eConsole)?) })
-        .map(|d| device_name(&d))
-        .unwrap_or_default()
 }

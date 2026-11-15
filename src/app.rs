@@ -22,7 +22,6 @@ pub enum CaptureSource {
     MultiRect(Vec<Rect>),
     Window(isize),
     Scrolling,
-    Other,
 }
 
 /// A finished capture travelling to the output pipeline.
@@ -70,7 +69,6 @@ pub enum ToolWindow {
     BatchPrint,
     ConvertToMp4,
     ScheduleRecording,
-    Settings,
 }
 
 pub enum AppCommand {
@@ -85,7 +83,6 @@ pub enum AppCommand {
     ToggleAutoCopy,
     TogglePreview,
     ToggleTimestamp,
-    ShowToolbar(bool),
     ToggleToolbar,
     OpenEditor,
     OpenSettings,
@@ -100,11 +97,13 @@ pub enum AppCommand {
         image: Image,
         dest: Destination,
     },
-    /// Show a tray notification.
+    /// Show a tray notification. Clicking it opens `file` (a video in the video editor,
+    /// anything else revealed in Explorer).
     Notify {
         title: String,
         text: String,
         is_error: bool,
+        file: Option<PathBuf>,
     },
     /// Command-line arguments forwarded from a second instance.
     ForwardedArgs(Vec<String>),
@@ -145,7 +144,12 @@ pub fn post(cmd: AppCommand) {
 
 /// Convenience: post a notification.
 pub fn notify(title: impl Into<String>, text: impl Into<String>, is_error: bool) {
-    post(AppCommand::Notify { title: title.into(), text: text.into(), is_error });
+    post(AppCommand::Notify { title: title.into(), text: text.into(), is_error, file: None });
+}
+
+/// Post a notification about a saved file; clicking it opens the file (see [`AppCommand::Notify`]).
+pub fn notify_file(title: impl Into<String>, text: impl Into<String>, file: PathBuf) {
+    post(AppCommand::Notify { title: title.into(), text: text.into(), is_error: false, file: Some(file) });
 }
 
 fn wake() {

@@ -185,7 +185,6 @@ type Stamp = Option<(u64, Option<SystemTime>)>;
 /// write in several steps). Dropping the watcher stops the thread.
 pub struct FileWatcher {
     stop: Arc<AtomicBool>,
-    pub path: PathBuf,
 }
 
 impl FileWatcher {
@@ -222,7 +221,7 @@ impl FileWatcher {
         if let Err(e) = res {
             log::warn!("editor: cannot watch {}: {e}", path.display());
         }
-        FileWatcher { stop, path }
+        FileWatcher { stop }
     }
 }
 

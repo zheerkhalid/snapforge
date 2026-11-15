@@ -52,6 +52,8 @@ pub enum CaptureError {
     WindowGone,
     #[error("capture cancelled")]
     Cancelled,
+    #[error("this capture cannot be repeated")]
+    NotRepeatable,
     #[error("capture failed: {0}")]
     Failed(String),
 }

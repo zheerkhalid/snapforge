@@ -260,10 +260,6 @@ impl EffectDef {
         self.shortcut = Some(s);
         self
     }
-    pub fn with_icon(mut self, i: &'static str) -> Self {
-        self.icon = i;
-        self
-    }
     pub fn whole_image(mut self) -> Self {
         self.scope = Scope::WholeImage;
         self
@@ -311,11 +307,9 @@ impl EffectRegistry {
         }
         groups.into_iter().map(|(_, v)| v).collect()
     }
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.defs.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.defs.is_empty()
     }
 
     /// The menu skeleton until the effects module registers the real operations.

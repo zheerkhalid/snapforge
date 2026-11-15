@@ -865,7 +865,50 @@ fn recorder_sub_page(ui: &mut Ui, s: &mut Session, sub: usize) {
         hint(ui, &p, &t("settings-no-options-yet"));
         return;
     }
-    generic::section(ui, "recorder", &mut s.copy.recorder, &|k| recorder_sub_for(k) == sub);
+    if sub == 1 || sub == 2 {
+        device_picker(ui, s, sub == 2);
+        ui.add_space(6.0);
+    }
+    generic::section(ui, "recorder", &mut s.copy.recorder, &|k| recorder_sub_for(k) == sub && k != "mic_device_id");
+}
+
+/// Microphone (audio sub-tab) or camera (webcam sub-tab) by name; the device lists are read
+/// once per Settings session.
+fn device_picker(ui: &mut Ui, s: &mut Session, camera: bool) {
+    let devices =
+        s.devices.get_or_insert_with(|| (crate::recorder::list_audio_inputs(), crate::recorder::list_cameras()));
+    let list: Vec<(String, String)> = if camera {
+        devices.1.iter().map(|c| (c.id.clone(), c.name.clone())).collect()
+    } else {
+        devices.0.iter().map(|d| (d.id.clone(), d.name.clone())).collect()
+    };
+    let (label, default) = if camera {
+        (t("settings-rec-camera-device"), t("settings-rec-camera-default"))
+    } else {
+        (t("settings-rec-mic-device"), t("settings-rec-mic-default"))
+    };
+    let current = if camera { &mut s.copy.recorder.webcam.device_id } else { &mut s.copy.recorder.mic_device_id };
+    let shown = list.iter().find(|(id, _)| id == current).map(|(_, n)| n.clone()).unwrap_or_else(|| {
+        if current.is_empty() {
+            default.clone()
+        } else {
+            t("settings-rec-device-missing")
+        }
+    });
+    form(ui, if camera { "rec-camera" } else { "rec-mic" }, |ui| {
+        row(ui, &label, |ui| {
+            egui::ComboBox::from_id_salt(("rec-device", camera))
+                .selected_text(shown)
+                .width(320.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(current, String::new(), default.clone());
+                    for (id, name) in &list {
+                        ui.selectable_value(current, id.clone(), name);
+                    }
+                })
+                .response
+        });
+    });
 }
 
 /// A settings section edited generically (until it gets a dedicated page).

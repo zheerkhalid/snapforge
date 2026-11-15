@@ -171,6 +171,7 @@ impl Document {
     }
 
     /// Replace the pixels without an undo step. Drops stale textures.
+    #[cfg(test)]
     pub fn set_image(&mut self, image: Image) {
         self.replace_pixels(Arc::new(image));
         self.mark_edited();
@@ -187,6 +188,7 @@ impl Document {
     }
 
     /// A new content state (fresh id); updates the dirty flag.
+    #[cfg(test)]
     pub fn mark_edited(&mut self) {
         self.revision = fresh_state();
         self.refresh_dirty();
@@ -681,10 +683,6 @@ pub struct ExportJob {
 }
 
 impl ExportJob {
-    pub fn ready(img: Arc<Image>) -> Self {
-        Self { base: img, flatten: None, select: None, crop: None }
-    }
-
     /// Flatten (and crop). May take a while for big annotated images: call off the UI thread.
     pub fn run(&self) -> Arc<Image> {
         let full = match &self.flatten {

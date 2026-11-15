@@ -226,7 +226,7 @@ pub fn start() -> Vec<String> {
     let s = settings::get().hotkeys.clone();
     let (combos, mut problems) = resolve(&s);
     let Some(hwnd) = UI.with(|u| u.borrow().hwnd).or_else(create_window) else {
-        problems.push("hotkeys: cannot create message window".into());
+        problems.push(i18n::t("hotkey-window-failed"));
         return problems;
     };
     let mut registered: Vec<Action> = Vec::new();

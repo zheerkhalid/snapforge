@@ -188,6 +188,15 @@ pub fn build_registry(
         .keywords("merge join stitch"));
     add(Command::new("tools.pdf", t("editor-tool-pdf"), K::Tools, Action::ImagesToPdf).icon("📄"));
     add(Command::new("tools.batch_print", t("editor-tool-batch-print"), K::Tools, Action::BatchPrint).icon("🖶"));
+    add(Command::new("tools.video_editor", t("menu-video-editor"), K::Tools, Action::VideoEditor)
+        .icon("🎬")
+        .keywords("video trim cut mp4 recording"));
+    add(Command::new("tools.convert_mp4", t("menu-convert-mp4"), K::Tools, Action::ConvertToMp4)
+        .icon("🎞")
+        .keywords("video wmv audio mp3 m4a extract resize"));
+    add(Command::new("tools.schedule_recording", t("menu-record-schedule"), K::Tools, Action::ScheduleRecording)
+        .icon("⏰")
+        .keywords("record timer"));
     add(Command::new("tools.settings", t("editor-settings"), K::Tools, Action::Settings)
         .key("Ctrl+,")
         .icon("⚙")
@@ -472,6 +481,10 @@ impl EditorApp {
         self.item(ui, "tools.settings");
         ui.separator();
         for id in ["tools.combine", "tools.pdf", "tools.batch_print"] {
+            self.item(ui, id);
+        }
+        ui.separator();
+        for id in ["tools.video_editor", "tools.convert_mp4", "tools.schedule_recording"] {
             self.item(ui, id);
         }
         ui.separator();

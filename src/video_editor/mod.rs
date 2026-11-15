@@ -46,6 +46,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use window::{Inner, Session};
 
+pub use dialogs::VIDEO_EXTENSIONS;
+
+/// True for files the video editor opens: videos (`.mp4`, `.wmv`, …) and `.sfvid` projects.
+pub fn accepts(path: &std::path::Path) -> bool {
+    dialogs::is_video(path) || dialogs::is_project(path)
+}
+
 /// Handle to the video editor window. Cheap to clone; all clones share one window.
 #[derive(Clone, Default)]
 pub struct VideoEditorWindow {

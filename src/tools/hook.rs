@@ -58,10 +58,6 @@ pub fn move_handled() {
     MOVE_PENDING.store(false, Ordering::Release);
 }
 
-pub fn is_dragging() -> bool {
-    DRAGGING.load(Ordering::Acquire)
-}
-
 pub fn is_running() -> bool {
     THREAD.load(Ordering::Acquire) != 0
 }

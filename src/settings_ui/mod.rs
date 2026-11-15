@@ -76,6 +76,8 @@ pub(crate) struct Session {
     pub rect: Option<[f32; 4]>,
     /// Seed for `@` in the file-name preview (stable while the window is open).
     pub preview_seed: u64,
+    /// Microphones and cameras, listed when the recorder's audio or webcam page first shows.
+    pub devices: Option<(Vec<crate::recorder::AudioDevice>, Vec<crate::recorder::Camera>)>,
     close: bool,
 }
 
@@ -121,6 +123,7 @@ impl SettingsWindow {
     }
 
     /// Close without applying (like Cancel).
+    #[cfg(test)]
     pub fn close(&self) {
         if let Some(s) = self.lock().session.as_mut() {
             s.close = true;
@@ -238,6 +241,7 @@ impl Session {
             ui_state,
             rect: None,
             preview_seed: crate::common::rng::Rng::from_entropy().next_u64(),
+            devices: None,
             close: false,
         }
     }

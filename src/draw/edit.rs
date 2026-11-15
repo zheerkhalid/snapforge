@@ -24,10 +24,6 @@ pub fn find_mut(objects: &mut [Object], id: ObjectId) -> Option<&mut Object> {
     objects.iter_mut().find(|o| o.id == id)
 }
 
-pub fn index_of(objects: &[Object], id: ObjectId) -> Option<usize> {
-    objects.iter().position(|o| o.id == id)
-}
-
 /// A fresh id (one more than the largest in use; ids start at 1).
 pub fn next_id(objects: &[Object]) -> ObjectId {
     objects.iter().map(|o| o.id).max().unwrap_or(0) + 1
@@ -133,13 +129,9 @@ pub fn bounds(obj: &Object) -> RectF {
 }
 
 /// Union of the visual bounds of the given objects.
+#[cfg(test)]
 pub fn selection_bounds(objects: &[Object], ids: &[ObjectId]) -> Option<RectF> {
     objects.iter().filter(|o| ids.contains(&o.id)).map(bounds).reduce(|a, b| a.union(&b))
-}
-
-/// Union of the editable frames of the given objects.
-pub fn selection_frame(objects: &[Object], ids: &[ObjectId]) -> Option<RectF> {
-    objects.iter().filter(|o| ids.contains(&o.id)).map(frame).reduce(|a, b| a.union(&b))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -834,6 +826,7 @@ pub struct StylePatch {
 
 impl StylePatch {
     /// A patch that copies every [`Style`] field (format painter).
+    #[cfg(test)]
     pub fn from_style(s: &Style) -> Self {
         Self {
             color: Some(s.color),
@@ -903,6 +896,7 @@ fn set<T: Clone>(dst: &mut T, v: &Option<T>) {
 }
 
 /// Apply a style patch to the objects in `ids`. Returns how many changed.
+#[cfg(test)]
 pub fn apply_style(objects: &mut [Object], ids: &[ObjectId], patch: &StylePatch) -> usize {
     objects.iter_mut().filter(|o| ids.contains(&o.id)).map(|o| patch.apply(o)).filter(|c| *c).count()
 }
@@ -913,6 +907,7 @@ pub fn apply_style(objects: &mut [Object], ids: &[ObjectId], patch: &StylePatch)
 
 /// The value for the next step stamp: continues the format of the most recent step (number or
 /// letter) from the highest value of that format. `Number(1)` when there are no steps.
+#[cfg(test)]
 pub fn next_step_value(objects: &[Object]) -> StepValue {
     let last = objects.iter().rev().find_map(|o| match &o.kind {
         Kind::Step(s) => Some(s.value),
@@ -950,8 +945,6 @@ pub fn next_step_value_as(objects: &[Object], letters: bool) -> StepValue {
 
 /// Clipboard payload version (same object schema as `.sfcap`'s `annotations.json`).
 pub const CLIPBOARD_VERSION: u32 = 1;
-/// Custom clipboard format name the UI should register for this payload.
-pub const CLIPBOARD_FORMAT: &str = "SnapForge.Annotations.v1";
 
 #[derive(Serialize, Deserialize)]
 struct ClipPayload {

@@ -16,21 +16,11 @@ pub enum VideoFormat {
 }
 
 impl VideoFormat {
-    pub const ALL: [VideoFormat; 3] = [VideoFormat::Mp4, VideoFormat::Wmv, VideoFormat::Mp3AudioOnly];
-
     pub fn extension(self) -> &'static str {
         match self {
             VideoFormat::Mp4 => "mp4",
             VideoFormat::Wmv => "wmv",
             VideoFormat::Mp3AudioOnly => "mp3",
-        }
-    }
-
-    pub fn label_key(self) -> &'static str {
-        match self {
-            VideoFormat::Mp4 => "rec-format-mp4",
-            VideoFormat::Wmv => "rec-format-wmv",
-            VideoFormat::Mp3AudioOnly => "rec-format-mp3",
         }
     }
 }
@@ -96,6 +86,9 @@ pub enum ScheduleTarget {
     FullScreen,
     /// `ScheduleSettings::region` in virtual-screen pixels.
     Region,
+    /// The top-level window whose title matches `ScheduleSettings::window_title` at the start
+    /// time (full screen when none does).
+    Window,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -163,6 +156,8 @@ pub struct ScheduleSettings {
     pub target: ScheduleTarget,
     /// [x, y, w, h] for `ScheduleTarget::Region`.
     pub region: [i32; 4],
+    /// Title (or part of it) of the window for `ScheduleTarget::Window`.
+    pub window_title: String,
     /// Put the PC to sleep when the scheduled recording finishes.
     pub sleep_after: bool,
 }
@@ -175,6 +170,7 @@ impl Default for ScheduleSettings {
             end: String::new(),
             target: ScheduleTarget::FullScreen,
             region: [0, 0, 1280, 720],
+            window_title: String::new(),
             sleep_after: false,
         }
     }

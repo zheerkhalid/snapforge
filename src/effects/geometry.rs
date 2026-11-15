@@ -1,12 +1,15 @@
 //! Geometry: crop, resize, canvas size, expand canvas, rotate, flip.
 
 use super::{par_rows, Anchor, Color, Edges};
-use crate::common::{Image, Rect};
+use crate::common::Image;
+#[cfg(test)]
+use crate::common::Rect;
 use serde::{Deserialize, Serialize};
 
 // ------------------------------------------------------------------ crop
 
 /// Copy of `rect` (clipped to the image).
+#[cfg(test)]
 pub fn crop(img: &Image, rect: Rect) -> Image {
     img.crop(rect)
 }
@@ -35,6 +38,7 @@ pub enum ResampleFilter {
 }
 
 impl ResampleFilter {
+    #[cfg(test)]
     pub const ALL: [ResampleFilter; 4] =
         [ResampleFilter::Nearest, ResampleFilter::Bilinear, ResampleFilter::Mitchell, ResampleFilter::Lanczos3];
 

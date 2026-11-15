@@ -6,8 +6,7 @@
 
 use crate::settings::{CaptureMode, Destination};
 use tiny_skia::{
-    BlendMode, Color, FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Rect, Stroke, StrokeDash,
-    Transform,
+    BlendMode, Color, FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,6 +20,7 @@ pub enum Icon {
 
 impl Icon {
     /// Every icon, for previews and tests.
+    #[cfg(test)]
     pub fn all() -> Vec<Icon> {
         let mut v: Vec<Icon> = CaptureMode::ALL.iter().map(|&m| Icon::Mode(m)).collect();
         v.extend(Destination::ALL.iter().map(|&d| Icon::Dest(d)));
@@ -411,11 +411,6 @@ pub fn to_bgra(pm: &Pixmap) -> Vec<u8> {
         px.swap(0, 2);
     }
     out
-}
-
-/// A rectangle helper for callers.
-pub fn rect(x: f32, y: f32, w: f32, h: f32) -> Option<Rect> {
-    Rect::from_xywh(x, y, w, h)
 }
 
 #[cfg(test)]

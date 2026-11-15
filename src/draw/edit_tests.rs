@@ -1,6 +1,8 @@
 //! Tests for serialization, `.sfcap`, hit-testing, handles, alignment, z-order, undo/redo,
 //! step numbering, copy/paste, group style edits and tool creation.
 
+use super::edit::*;
+use super::history::Edit;
 use super::tests::{p, rect, showcase, Scene};
 use super::*;
 use crate::common::Image;

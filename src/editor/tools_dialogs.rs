@@ -75,10 +75,6 @@ impl ToolsDialogs {
         }
     }
 
-    pub fn is_open(&self) -> bool {
-        self.combine.is_some() || self.pdf.is_some() || self.print.is_some()
-    }
-
     /// Call every frame; `owner_hwnd` owns file/print dialogs.
     pub fn ui(&mut self, ctx: &egui::Context, owner_hwnd: isize) -> Vec<ToolsEvent> {
         let mut events = Vec::new();

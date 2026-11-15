@@ -280,10 +280,6 @@ impl Encoder {
         Ok(Self { writer, video, audio, audio_rate, audio_state, hardware })
     }
 
-    pub fn has_video(&self) -> bool {
-        self.video.is_some()
-    }
-
     pub fn write_video(&self, sample: &IMFSample) -> Result<()> {
         let Some(idx) = self.video else { return Ok(()) };
         // SAFETY: valid writer and sample.
@@ -320,11 +316,6 @@ impl Encoder {
     }
 
     /// Media time covered by the audio written so far.
-    pub fn audio_time(&self) -> i64 {
-        let pos = self.audio_state.lock().map(|s| s.pos).unwrap_or(0);
-        super::clock::sample_time(pos, self.audio_rate)
-    }
-
     pub fn finish(self) -> Result<()> {
         // SAFETY: valid writer; finalizes and closes the file.
         unsafe { self.writer.Finalize().context("finalize") }
@@ -367,6 +358,7 @@ pub fn memory_sample(data: &[u8], time: i64, duration: i64) -> Result<IMFSample>
 
 // ------------------------------------------------------------------ reading back
 
+#[cfg(test)]
 #[derive(Debug, Clone, Default)]
 pub struct StreamInfo {
     pub audio: bool,
@@ -380,12 +372,15 @@ pub struct StreamInfo {
     pub rate: u32,
 }
 
+/// What [`probe`] reads back (the recorder's hardware tests check timing with it).
+#[cfg(test)]
 #[derive(Debug, Clone, Default)]
 pub struct MediaInfo {
     pub duration: i64,
     pub streams: Vec<StreamInfo>,
 }
 
+#[cfg(test)]
 impl MediaInfo {
     pub fn video(&self) -> Option<&StreamInfo> {
         self.streams.iter().find(|s| !s.audio)
@@ -435,6 +430,7 @@ pub fn native_streams(reader: &IMFSourceReader) -> Vec<(u32, IMFMediaType, bool)
 }
 
 /// Read every compressed sample of `path` and report per-stream timing.
+#[cfg(test)]
 pub fn probe(path: &Path) -> Result<MediaInfo> {
     let reader = source_reader(path, None)?;
     let duration = duration_of(&reader);
@@ -586,6 +582,7 @@ pub fn remux_to_mp4(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 pub fn subtype_name(g: &GUID) -> &'static str {
     match *g {
         x if x == MFVideoFormat_H264 => "H.264",

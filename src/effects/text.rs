@@ -43,12 +43,13 @@ pub enum TextAlign {
 /// Render `text` in `font` at `size` px. `max_width` > 0 wraps long lines (words, then
 /// characters for words that don't fit). Returns a tightly sized premultiplied image, or an
 /// empty (0x0) image for empty text or if GDI fails (logged).
+#[cfg(test)]
 pub fn render_text(text: &str, font: &str, size: u32, color: Color, max_width: u32) -> Image {
     let spec = FontSpec { face: font.to_string(), size, ..Default::default() };
     render_text_styled(text, &spec, color, max_width, TextAlign::Left)
 }
 
-/// [`render_text`] with bold/italic/underline and line alignment.
+/// Render `text` with a [`FontSpec`] (bold/italic/underline) and line alignment.
 pub fn render_text_styled(text: &str, font: &FontSpec, color: Color, max_width: u32, align: TextAlign) -> Image {
     match coverage(text, font, max_width, align) {
         Some((w, h, cov)) => {
@@ -61,28 +62,6 @@ pub fn render_text_styled(text: &str, font: &FontSpec, color: Color, max_width: 
             Image::from_bgra(w, h, data)
         }
         None => Image::new(0, 0),
-    }
-}
-
-/// Size the text would occupy (same rules as [`render_text_styled`]).
-pub fn measure_text(text: &str, font: &FontSpec, max_width: u32) -> (u32, u32) {
-    if text.is_empty() {
-        return (0, 0);
-    }
-    // SAFETY: the DC and font are released before returning.
-    unsafe {
-        let dc = CreateCompatibleDC(HDC::default());
-        if dc.is_invalid() {
-            return (0, 0);
-        }
-        let hfont = create_font(font, font.size as i32);
-        let old = SelectObject(dc, hfont);
-        let r = calc_rect(dc, text, max_width, format_flags(max_width, TextAlign::Left));
-        SelectObject(dc, old);
-        let _ = DeleteObject(hfont);
-        let _ = DeleteDC(dc);
-        let pad = italic_pad(font);
-        ((r.right - r.left).max(0) as u32 + pad, (r.bottom - r.top).max(0) as u32)
     }
 }
 

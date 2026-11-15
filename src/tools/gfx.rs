@@ -103,25 +103,10 @@ impl Dib {
         self.data_mut().fill(0);
     }
 
-    /// Copy as an [`Image`] (premultiplied BGRA), e.g. for previews.
+    /// Copy as an [`Image`] (premultiplied BGRA), for the preview tests.
+    #[cfg(test)]
     pub fn to_image(&self) -> Image {
         Image::from_bgra(self.w as u32, self.h as u32, self.data().to_vec())
-    }
-
-    /// Copy `img` (BGRA) to (x, y), clipped.
-    pub fn blit_image(&mut self, img: &Image, x: i32, y: i32) {
-        let dst = Rect::new(x, y, img.width as i32, img.height as i32).intersect(&Rect::new(0, 0, self.w, self.h));
-        if dst.is_empty() {
-            return;
-        }
-        let stride = self.w as usize * 4;
-        let rs = dst.w as usize * 4;
-        let data = self.data_mut();
-        for row in 0..dst.h {
-            let s = (((dst.y - y + row) as usize) * img.width as usize + (dst.x - x) as usize) * 4;
-            let d = (dst.y + row) as usize * stride + dst.x as usize * 4;
-            data[d..d + rs].copy_from_slice(&img.data[s..s + rs]);
-        }
     }
 
     /// Copy a raw BGRA block of `w` x `h` to (x, y), clipped.
@@ -259,7 +244,6 @@ pub enum Align {
 pub enum Face {
     Ui,
     UiSemibold,
-    Mono,
 }
 
 /// GDI text rendered as a coverage mask and blended into a DIB.
@@ -275,7 +259,6 @@ impl Text {
             let (name, weight) = match face {
                 Face::Ui => ("Segoe UI", 400),
                 Face::UiSemibold => ("Segoe UI Semibold", 600),
-                Face::Mono => ("Consolas", 400),
             };
             let n = wide(name);
             // SAFETY: valid NUL-terminated face name; the font is deleted in Drop.
@@ -540,19 +523,8 @@ impl Grabber {
         Some(dib)
     }
 
-    pub fn release(&mut self) {
-        self.dib = None;
-    }
-
     /// The DIB of the last grab.
     pub fn into_dib(self) -> Option<Dib> {
         self.dib
     }
-}
-
-/// The color of one screen pixel.
-pub fn screen_pixel(p: Point) -> Option<[u8; 4]> {
-    let mut g = Grabber::default();
-    let img = g.grab(Rect::new(p.x, p.y, 1, 1))?;
-    Some(img.pixel(0, 0))
 }

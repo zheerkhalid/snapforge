@@ -191,11 +191,14 @@ pub(super) struct Session {
 
 impl Session {
     pub fn new() -> Self {
-        let builder = ViewportBuilder::default()
+        let mut builder = ViewportBuilder::default()
             .with_title(t("ve-window-title"))
             .with_inner_size(DEFAULT_SIZE)
             .with_min_inner_size(MIN_SIZE)
             .with_drag_and_drop(true);
+        if let Some(icon) = crate::editor::app_icon() {
+            builder = builder.with_icon(icon);
+        }
         Self {
             source: None,
             loading: None,
@@ -250,10 +253,6 @@ impl Session {
 
     pub fn is_dirty(&self) -> bool {
         self.source.is_some() && (self.edit != self.saved || self.pending.is_some())
-    }
-
-    pub fn duration(&self) -> u64 {
-        self.tl.duration_ms
     }
 
     pub fn source_duration(&self) -> u64 {

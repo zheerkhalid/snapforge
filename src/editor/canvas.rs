@@ -392,7 +392,6 @@ fn handle_input(
                 released: primary_released,
                 double_clicked: resp.double_clicked(),
                 modifiers: mods,
-                secondary_clicked: resp.secondary_clicked(),
                 scroll: tool_scroll,
                 hovered: resp.hovered(),
             };

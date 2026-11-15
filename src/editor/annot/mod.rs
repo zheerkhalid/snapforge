@@ -112,7 +112,7 @@ enum Drag {
     Create { tool: Tool, id: ObjectId, start: Pt, before: Vec<Object> },
     Freehand { tool: Tool, id: ObjectId, start: Pt, before: Vec<Object> },
     Move { start: Pt, snaps: Vec<Object>, before: Vec<Object> },
-    Handle { id: ObjectId, handle: HandleId, start: Pt, snap: Box<Object>, before: Vec<Object> },
+    Handle { handle: HandleId, start: Pt, snap: Box<Object>, before: Vec<Object> },
     Rubber { start: Pt, cur: Pt, add: bool },
 }
 
@@ -224,10 +224,6 @@ impl DrawState {
         if settings::get().draw.last_styles.get(tool.id()) != Some(&ts) {
             settings::update(|s| s.draw.remember(tool, ts));
         }
-    }
-
-    pub fn is_dragging(&self) -> bool {
-        !matches!(self.drag, Drag::None) || self.poly.is_some()
     }
 
     fn sync_doc(&mut self, doc: &Document) {
@@ -367,8 +363,7 @@ impl DrawState {
         if self.sel.len() == 1 {
             if let Some(o) = find(&objs, self.sel[0]) {
                 if let Some(h) = handle_at(o, p, 7.0 / scale, scale) {
-                    self.drag =
-                        Drag::Handle { id: o.id, handle: h, start: p, snap: Box::new(o.clone()), before: objs.clone() };
+                    self.drag = Drag::Handle { handle: h, start: p, snap: Box::new(o.clone()), before: objs.clone() };
                     return;
                 }
             }

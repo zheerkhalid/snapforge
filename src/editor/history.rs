@@ -198,6 +198,7 @@ impl History {
     }
 
     /// Compress synchronously (deterministic tests).
+    #[cfg(test)]
     pub fn new_sync(budget: Budget) -> Self {
         Self { sync: true, ..Self::new(budget) }
     }
@@ -221,16 +222,15 @@ impl History {
     pub fn undo_len(&self) -> usize {
         self.undo.len()
     }
-    pub fn redo_len(&self) -> usize {
-        self.redo.len()
-    }
 
+    #[cfg(test)]
     pub fn raw_bytes(&self) -> usize {
         self.undo.iter().chain(&self.redo).map(Step::raw_bytes).sum()
     }
     pub fn total_bytes(&self) -> usize {
         self.undo.iter().chain(&self.redo).map(Step::bytes).sum()
     }
+    #[cfg(test)]
     pub fn packed_steps(&self) -> usize {
         self.undo
             .iter()
@@ -268,11 +268,6 @@ impl History {
     pub fn push_undo_keep_redo(&mut self, step: Step) {
         self.undo.push(step);
         self.maintain();
-    }
-
-    pub fn clear(&mut self) {
-        self.undo.clear();
-        self.redo.clear();
     }
 
     /// Collect finished background compressions.

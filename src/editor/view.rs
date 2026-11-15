@@ -163,11 +163,6 @@ impl ViewState {
         }
     }
 
-    /// Displayed image size in physical px.
-    pub fn scaled_size(&self, img: [f32; 2]) -> [f32; 2] {
-        [img[0] * self.zoom, img[1] * self.zoom]
-    }
-
     /// Zoom so the image rectangle `r` ([x, y, w, h] in image px) fills ~90% of the
     /// canvas, centred on it.
     pub fn zoom_to_rect(&mut self, r: [f32; 4], img: [f32; 2], view: [f32; 2]) {

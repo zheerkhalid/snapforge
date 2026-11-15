@@ -150,7 +150,7 @@ fn draw_state_commands_record_steps() {
     });
     annot::with_state(|s| {
         assert!(s.select_all(&d));
-        assert!(s.align(&mut d, draw::Align::Left));
+        assert!(s.align(&mut d, draw::edit::Align::Left));
         assert!(s.nudge(&mut d, 2.0, 0.0));
         let json = s.copy_selected(&d).expect("copied");
         assert!(s.paste_json(&mut d, &json));
