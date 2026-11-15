@@ -20,9 +20,13 @@ fn display_available() -> bool {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
-    let ok = !monitors().is_empty() && !win::virtual_screen().is_empty();
+    // Also require a readable desktop: a locked workstation or the secure desktop makes
+    // every screen read fail, which says nothing about our code.
+    let ok = !monitors().is_empty()
+        && !win::virtual_screen().is_empty()
+        && grab_with(Backend::Gdi, Rect::new(win::virtual_screen().x, win::virtual_screen().y, 1, 1), false).is_ok();
     if !ok {
-        eprintln!("no display: skipping display-dependent capture test");
+        eprintln!("no readable display: skipping display-dependent capture test");
     }
     ok
 }
