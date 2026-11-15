@@ -481,32 +481,38 @@ fn paint_head_mini(p: &egui::Painter, rect: egui::Rect, h: ArrowHead, end: bool,
 
 fn font_combo(ui: &mut egui::Ui, st: &mut DrawState, family: &mut String, dark: bool) {
     let shown: String = family.chars().take(18).collect();
-    egui::ComboBox::from_id_salt("draw-font")
-        .width(150.0)
-        .selected_text(shown)
-        .height(360.0)
-        .show_ui(ui, |ui| {
-            ui.set_min_width(260.0);
-            let Some(list) = st.fonts.families() else {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(t("editor-loading"));
-                });
-                ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
-                return;
-            };
-            let filter_id = egui::Id::new("draw-font-filter");
-            let mut filter: String = ui.data_mut(|d| d.get_temp(filter_id).unwrap_or_default());
-            let r =
-                ui.add(egui::TextEdit::singleline(&mut filter).hint_text(t("draw-font-search")).desired_width(240.0));
-            if r.changed() {
-                ui.data_mut(|d| d.insert_temp(filter_id, filter.clone()));
-            }
-            let f = filter.to_lowercase();
-            let items: Vec<&String> = list.iter().filter(|n| f.is_empty() || n.to_lowercase().contains(&f)).collect();
-            let mut budget = 6u32;
-            let row_h = 28.0;
-            egui::ScrollArea::vertical().max_height(300.0).show_rows(ui, row_h, items.len(), |ui, range| {
+    // A fixed-size popup (a ComboBox keeps the size of its first, still-loading frame).
+    let button =
+        ui.add(egui::Button::new(format!("{shown}  ⏷")).min_size(vec2(150.0, 0.0))).on_hover_text(t("draw-prop-font"));
+    let popup_id = ui.make_persistent_id("draw-font-popup");
+    if button.clicked() {
+        ui.memory_mut(|m| m.toggle_popup(popup_id));
+    }
+    egui::popup_below_widget(ui, popup_id, &button, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+        ui.set_min_size(vec2(280.0, 360.0));
+        let Some(list) = st.fonts.families() else {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(t("editor-loading"));
+            });
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+            return;
+        };
+        let filter_id = egui::Id::new("draw-font-filter");
+        let mut filter: String = ui.data_mut(|d| d.get_temp(filter_id).unwrap_or_default());
+        let r = ui.add(egui::TextEdit::singleline(&mut filter).hint_text(t("draw-font-search")).desired_width(240.0));
+        if r.changed() {
+            ui.data_mut(|d| d.insert_temp(filter_id, filter.clone()));
+        }
+        let f = filter.to_lowercase();
+        let items: Vec<&String> = list.iter().filter(|n| f.is_empty() || n.to_lowercase().contains(&f)).collect();
+        let mut budget = 6u32;
+        let row_h = 28.0;
+        egui::ScrollArea::vertical().id_salt("draw-font-list").max_height(320.0).min_scrolled_height(320.0).show_rows(
+            ui,
+            row_h,
+            items.len(),
+            |ui, range| {
                 for name in &items[range] {
                     let selected = family.eq_ignore_ascii_case(name);
                     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), egui::Sense::click());
@@ -549,13 +555,12 @@ fn font_combo(ui: &mut egui::Ui, st: &mut DrawState, family: &mut String, dark: 
                     }
                     if resp.on_hover_text(name.as_str()).clicked() {
                         *family = name.to_string();
-                        ui.close_menu();
+                        ui.memory_mut(|m| m.close_popup());
                     }
                 }
-            });
-        })
-        .response
-        .on_hover_text(t("draw-prop-font"));
+            },
+        );
+    });
 }
 
 fn kind_options(
