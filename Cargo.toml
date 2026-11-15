@@ -32,6 +32,9 @@ pdf-writer = "0.12"
 miniz_oxide = "0.8"
 # .sfcap project files (zip). Deflate via flate2 only (already in the tree for PNG); no zopfli/bzip2/zstd/aes.
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+# Needed by `#[windows::core::implement]` (DirectWrite text renderer / outline sink in src/draw).
+# Animated GIF export in the video editor. Same version `image` already pulls in, so it adds no code.
+gif = "0.14"
 
 [dependencies.windows]
 version = "0.58"
@@ -62,11 +65,11 @@ features = [
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
+    "Win32_Media_Audio",
+    "Win32_Media_MediaFoundation",
     "Win32_Graphics_Gdi",
     "Win32_Media",
-    "Win32_Media_Audio",
     "Win32_Media_KernelStreaming",
-    "Win32_Media_MediaFoundation",
     "Win32_Media_Multimedia",
     "Win32_Security",
     "Win32_Security_Cryptography",
