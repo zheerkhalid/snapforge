@@ -29,6 +29,7 @@
 //! * `palette.rs`      – the command palette (Ctrl+K)
 //! * `fileops.rs`      – Recycle Bin, file properties, sequence names, file watcher
 //! * `scan.rs`, `scan_post.rs` – WIA 2.0 acquisition and scan post-processing
+//! * `media_tools.rs`  – Convert to MP4 and Schedule Recording windows (own viewports)
 //!
 //! EXTENSION (integration pass): [`register_effects`], [`register_canvas_tools`],
 //! [`set_tools_host`]; effects edit pixels through `Document::apply_image_edit`,
@@ -38,7 +39,7 @@ mod annot;
 mod app;
 mod canvas;
 mod commands;
-mod dialogs;
+pub(crate) mod dialogs;
 mod document;
 mod effects;
 mod ext;
@@ -49,6 +50,7 @@ mod history;
 #[cfg(test)]
 mod integration_tests;
 mod jobs;
+mod media_tools;
 mod menus;
 mod modals;
 mod palette;
@@ -160,6 +162,11 @@ pub(crate) fn tools_host() -> Arc<dyn ToolsHost> {
     EXT.lock().ok().and_then(|e| e.host.clone()).unwrap_or_else(|| Arc::new(ext::DefaultToolsHost))
 }
 
+/// The app icon for egui viewports (decoded once per call; small).
+pub(crate) fn app_icon() -> Option<Arc<egui::IconData>> {
+    style::app_icon()
+}
+
 /// Bench support: QPC timestamp of the first frame presented after the most recent
 /// [`open_image`] call.
 pub static LAST_IMAGE_PRESENTED_QPC: AtomicI64 = AtomicI64::new(0);
@@ -182,8 +189,10 @@ pub(crate) enum EditorMsg {
     OpenSettings(Option<crate::settings_ui::Tab>),
     /// A Tools dialog, with the open images when it came from the editor.
     OpenTool(tools_dialogs::ToolKind, Option<ToolsContext>),
-    /// HOOK(video-editor): open the video editor window (see [`open_video_editor`]).
+    /// The video editor window (see [`open_video_editor`]).
     OpenVideo(Option<PathBuf>),
+    /// Convert to MP4 or Schedule Recording.
+    OpenMedia(media_tools::MediaKind),
 }
 
 /// Built-in registrations (effects, draw tools, clone stamp, tools host), once per process.
@@ -351,12 +360,7 @@ pub fn open_about() {
 }
 
 fn open_settings_tab(tab: Option<crate::settings_ui::Tab>) {
-    if !is_running() {
-        START_HIDDEN.store(true, Ordering::Release);
-    }
-    send(EditorMsg::OpenSettings(tab), false);
-    // A hidden editor window runs no frames: pump one off-screen.
-    window::show_ghost(editor_hwnd());
+    send_to_hidden_host(EditorMsg::OpenSettings(tab));
 }
 
 /// Tools ▸ Combine Images from outside the editor (tray, toolbar).
@@ -377,22 +381,47 @@ pub fn open_batch_print() {
     send(EditorMsg::OpenTool(tools_dialogs::ToolKind::BatchPrint, None), true);
 }
 
-/// HOOK(video-editor): open the video editor (a `VideoEditorWindow` viewport hosted by the
-/// editor app, like the Settings window: `open(Option<PathBuf>)`, `ui(ctx)`, `is_open()`).
-/// The final integration pass fills in `app::VideoEditorHost`.
-#[allow(dead_code)]
+/// Open the video editor, optionally with a video or `.sfvid` project. It is its own
+/// viewport of the editor app (like Settings), so the image editor window stays as it is.
 pub fn open_video_editor(path: Option<PathBuf>) {
+    send_to_hidden_host(EditorMsg::OpenVideo(path));
+}
+
+/// Tools ▸ Convert to MP4 (its own window; the image editor stays as it is).
+pub fn open_convert_to_mp4() {
+    send_to_hidden_host(EditorMsg::OpenMedia(media_tools::MediaKind::Convert));
+}
+
+/// Record ▸ Schedule Recording (its own window; the image editor stays as it is).
+pub fn open_schedule_recording() {
+    send_to_hidden_host(EditorMsg::OpenMedia(media_tools::MediaKind::Schedule));
+}
+
+/// Deliver a message for a window that has its own viewport: a hidden editor window runs
+/// no frames, so one is pumped invisibly (see `window::show_ghost`).
+fn send_to_hidden_host(msg: EditorMsg) {
     if !is_running() {
         START_HIDDEN.store(true, Ordering::Release);
     }
-    send(EditorMsg::OpenVideo(path), false);
+    send(msg, false);
     window::show_ghost(editor_hwnd());
 }
 
-/// Open files from disk in tabs.
+/// Open files from disk: images and `.sfcap` projects in tabs, a video or `.sfvid`
+/// project in the video editor.
 pub fn open_files(paths: Vec<PathBuf>) {
-    START_HIDDEN.store(false, Ordering::Release);
-    send(EditorMsg::OpenFiles(paths), true);
+    let (videos, images): (Vec<PathBuf>, Vec<PathBuf>) =
+        paths.into_iter().partition(|p| crate::video_editor::accepts(p));
+    if let Some(v) = videos.first() {
+        if videos.len() > 1 {
+            log::info!("editor: the video editor opens one file at a time; ignoring {} more", videos.len() - 1);
+        }
+        open_video_editor(Some(v.clone()));
+    }
+    if !images.is_empty() {
+        START_HIDDEN.store(false, Ordering::Release);
+        send(EditorMsg::OpenFiles(images), true);
+    }
 }
 
 /// Show the editor (empty if no tabs).

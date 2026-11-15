@@ -12,6 +12,7 @@ use super::fileops::{self, FileWatcher};
 use super::fx_session::{self, FxSession, SessionOutcome};
 use super::history::{Budget, MB};
 use super::jobs::{EffectTarget, JobQueue, JobResult, Jobs};
+use super::media_tools::MediaTools;
 use super::modals::Modal;
 use super::palette::{self, PaletteOutcome, PaletteState};
 use super::param_dialog::{DialogOutcome, EffectDialog};
@@ -25,6 +26,7 @@ use crate::common::{win, Image};
 use crate::i18n::{t, tf};
 use crate::settings::{self, Destination};
 use crate::settings_ui::SettingsWindow;
+use crate::video_editor::VideoEditorWindow;
 use eframe::egui::{
     self, vec2, Align2, Color32, CornerRadius, Id, Key, Margin, RichText, Stroke, TextureHandle, ViewportCommand,
 };
@@ -145,29 +147,14 @@ pub struct EditorApp {
     pub(super) fx: Option<FxSession>,
     /// Text of the last egui paste event (annotation JSON is pasted as objects).
     paste_text: Option<String>,
-    /// HOOK(video-editor): hosts the video editor window.
-    video: VideoEditorHost,
+    /// The video editor (its own viewport; shown even while this window is hidden).
+    video: VideoEditorWindow,
+    /// The video editor window's icon was set for the current session.
+    video_icon_done: bool,
+    /// Convert to MP4 and Schedule Recording (their own viewports).
+    media: MediaTools,
     /// Started hidden: keep hiding for these first frames (eframe shows after frame 1).
     hide_frames: u8,
-}
-
-/// HOOK(video-editor): placeholder host for `video_editor::VideoEditorWindow` (same shape
-/// as [`SettingsWindow`]: `open(Option<PathBuf>)`, `ui(ctx)`, `is_open()`). The final
-/// integration pass replaces the body of these three methods with the real window.
-#[derive(Default)]
-pub(super) struct VideoEditorHost {
-    requested: Option<Option<PathBuf>>,
-}
-
-impl VideoEditorHost {
-    pub fn open(&mut self, path: Option<PathBuf>) {
-        log::info!("editor: video editor requested ({path:?}); not hosted in this build yet");
-        self.requested = Some(path);
-    }
-    pub fn ui(&mut self, _ctx: &egui::Context) {}
-    pub fn is_open(&self) -> bool {
-        false
-    }
 }
 
 impl EditorApp {
@@ -234,7 +221,9 @@ impl EditorApp {
             tools_dlg: ToolsDialogs::new(),
             fx: None,
             paste_text: None,
-            video: VideoEditorHost::default(),
+            video: VideoEditorWindow::new(),
+            video_icon_done: false,
+            media: MediaTools::new(),
             hide_frames: 0,
         };
         if super::start_hidden() {
@@ -352,6 +341,11 @@ impl EditorApp {
                 }
                 EditorMsg::OpenVideo(path) => {
                     self.video.open(path);
+                    self.video_icon_done = false;
+                    self.pumped_hidden();
+                }
+                EditorMsg::OpenMedia(kind) => {
+                    self.media.open(kind);
                     self.pumped_hidden();
                 }
                 EditorMsg::OpenFiles(paths) => {
@@ -414,6 +408,13 @@ impl EditorApp {
     }
 
     pub(super) fn open_paths(&mut self, paths: Vec<PathBuf>) {
+        let (videos, paths): (Vec<PathBuf>, Vec<PathBuf>) =
+            paths.into_iter().partition(|p| crate::video_editor::accepts(p));
+        if let Some(v) = videos.into_iter().next() {
+            // The video editor holds one video at a time.
+            self.video.open(Some(v));
+            self.video_icon_done = false;
+        }
         let mut to_load = Vec::new();
         let (projects, paths): (Vec<PathBuf>, Vec<PathBuf>) =
             paths.into_iter().partition(|p| crate::draw::sfcap::is_sfcap(p));
@@ -766,8 +767,9 @@ impl EditorApp {
     fn handle_drops(&mut self, ctx: &egui::Context) {
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.path.clone()).collect());
         if !dropped.is_empty() {
-            let (ok, skipped): (Vec<_>, Vec<_>) =
-                dropped.into_iter().partition(|p| dialogs::is_supported_image(p) || crate::draw::sfcap::is_sfcap(p));
+            let (ok, skipped): (Vec<_>, Vec<_>) = dropped.into_iter().partition(|p| {
+                dialogs::is_supported_image(p) || crate::draw::sfcap::is_sfcap(p) || crate::video_editor::accepts(p)
+            });
             if let Some(p) = skipped.first() {
                 let name = file_name(p);
                 self.toast(tf("editor-open-failed", &[("name", &name), ("error", &t("editor-unsupported"))]), true);
@@ -1694,7 +1696,7 @@ impl EditorApp {
         }
     }
 
-    /// Settings, Tools dialogs, interactive effects and the video editor hook.
+    /// Settings, video editor, media tools, Tools dialogs and interactive effects.
     fn hosted_windows(&mut self, ctx: &egui::Context) {
         self.settings_win.ui(ctx);
         if self.settings_win.is_open() && !self.settings_icon_done {
@@ -1704,6 +1706,15 @@ impl EditorApp {
             }
         }
         self.video.ui(ctx);
+        if self.video.is_open() && !self.video_icon_done {
+            // The window has its plain title until a file has loaded (the title then names
+            // the file), so the first frames find it by that title.
+            self.video_icon_done = window::set_icon_by_title(&t("ve-window-title"));
+            if !self.video_icon_done {
+                ctx.request_repaint_after(Duration::from_millis(50));
+            }
+        }
+        self.media.ui(ctx);
         for ev in self.tools_dlg.ui(ctx, self.hwnd) {
             match ev {
                 ToolsEvent::NewTab { image, title } => {

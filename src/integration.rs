@@ -29,6 +29,10 @@ pub fn execute(cmd: AppCommand) {
         AppCommand::OpenTool(ToolWindow::CombineImages) => crate::editor::open_combine_images(),
         AppCommand::OpenTool(ToolWindow::ImagesToPdf) => crate::editor::open_images_to_pdf(),
         AppCommand::OpenTool(ToolWindow::BatchPrint) => crate::editor::open_batch_print(),
-        _ => log::info!("command not available yet"),
+        AppCommand::OpenTool(ToolWindow::ConvertToMp4) => crate::editor::open_convert_to_mp4(),
+        AppCommand::OpenTool(ToolWindow::ScheduleRecording) => crate::editor::open_schedule_recording(),
+        AppCommand::OpenVideoEditor(path) => crate::editor::open_video_editor(path),
+        // Phase 1 commands are executed by the controller before reaching this point.
+        _ => log::warn!("integration: unexpected command"),
     }
 }

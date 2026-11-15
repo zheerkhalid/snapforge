@@ -411,7 +411,7 @@ fn execute(cmd: AppCommand) {
             schedule_idle();
         }
         AppCommand::Deliver { image, dest } => deliver_to(image, dest, None, false),
-        AppCommand::Notify { title, text, is_error } => tray::notify(&title, &text, is_error),
+        AppCommand::Notify { title, text, is_error, file } => tray::notify_file(&title, &text, is_error, file),
         AppCommand::ForwardedArgs(args) => match cli::parse(&args) {
             Ok(c) => handle_cli(&c, false),
             Err(e) => log::warn!("forwarded args rejected: {e}"),
@@ -747,7 +747,11 @@ fn exit_if(flag: bool) {
 }
 
 fn notify_saved(path: &Path) {
-    app::notify(i18n::t("app-name"), i18n::tf("notify-saved", &[("path", &path.display().to_string())]), false);
+    app::notify_file(
+        i18n::t("app-name"),
+        i18n::tf("notify-saved", &[("path", &path.display().to_string())]),
+        path.to_path_buf(),
+    );
 }
 
 fn notify_err(e: &anyhow::Error) {

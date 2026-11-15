@@ -286,6 +286,17 @@ fn wmv_and_conversions() {
     );
     assert_eq!(ci.video().map(|v| v.subtype), Some(MFVideoFormat_H264));
 
+    // Half size at 10 fps (the clip is 15 fps): every output frame is on the 10 fps grid.
+    let small = dir.join("from_wmv_small.mp4");
+    let opts = ConvertOptions { resize: convert::Resize::Percent(50), fps: Some(10), ..Default::default() };
+    convert_to_mp4(&f.path, &small, &opts, &mut |_| true).expect("convert small");
+    let si = mf::probe(&small).expect("probe small");
+    let (sv, cv) = (si.video().expect("video"), ci.video().expect("video"));
+    println!("convert 50% @10fps: {}x{}, {} frames, {:.0} ms", sv.width, sv.height, sv.samples, ms(sv.end_ts));
+    assert_eq!((sv.width, sv.height), ((cv.width / 2) & !1, (cv.height / 2) & !1));
+    let expected = ms(sv.end_ts) / 100.0;
+    assert!((sv.samples as f64 - expected).abs() <= 2.0, "{} frames for {:.0} ms", sv.samples, ms(sv.end_ts));
+
     for (fmt, ext, sub) in [(AudioFormat::M4a, "m4a", MFAudioFormat_AAC), (AudioFormat::Mp3, "mp3", MFAudioFormat_MP3)]
     {
         let out = dir.join(format!("audio.{ext}"));

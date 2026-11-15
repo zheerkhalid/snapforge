@@ -752,10 +752,12 @@ pub fn stop() {
     let _ = std::thread::Builder::new().name("rec-finish".into()).spawn(|| match finish() {
         Ok(f) => {
             let open_after = crate::settings::get().recorder.open_after;
-            crate::app::notify(
+            // Clicking the balloon opens the recording in the video editor.
+            let key = if crate::video_editor::accepts(&f.path) { "rec-saved-edit" } else { "rec-saved" };
+            crate::app::notify_file(
                 crate::i18n::t("app-name"),
-                crate::i18n::tf("rec-saved", &[("path", &f.path.display().to_string())]),
-                false,
+                crate::i18n::tf(key, &[("path", &f.path.display().to_string())]),
+                f.path.clone(),
             );
             if open_after {
                 win::reveal_in_explorer(&f.path);
@@ -864,11 +866,8 @@ pub fn recover_pending() {
     let _ = std::thread::Builder::new().name("rec-recover".into()).spawn(|| {
         let _com = mf::ComGuard::mta();
         for p in recover_pending_in(&journal::journal_dir()) {
-            crate::app::notify(
-                crate::i18n::t("app-name"),
-                crate::i18n::tf("rec-recovered", &[("path", &p.display().to_string())]),
-                false,
-            );
+            let text = crate::i18n::tf("rec-recovered", &[("path", &p.display().to_string())]);
+            crate::app::notify_file(crate::i18n::t("app-name"), text, p);
         }
     });
 }

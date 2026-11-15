@@ -13,6 +13,7 @@ use crate::i18n::{t, tf};
 use crate::settings;
 use anyhow::{Context, Result};
 use std::cell::RefCell;
+use std::path::PathBuf;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -40,8 +41,8 @@ struct Tray {
     balloon_icon: HICON,
     taskbar_created: u32,
     added: bool,
-    /// Text of the last balloon, for NIN_BALLOONUSERCLICK.
-    last_balloon: String,
+    /// The file the last balloon was about, opened on NIN_BALLOONUSERCLICK.
+    last_file: Option<PathBuf>,
 }
 
 thread_local! {
@@ -96,7 +97,7 @@ fn add_icon(tr: &mut Tray) {
     d.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     d.uCallbackMessage = WM_TRAY;
     d.hIcon = tr.icon;
-    copy_wide(&mut d.szTip, &t("tray-tooltip"));
+    copy_wide(&mut d.szTip, &tooltip());
     if !shell(NIM_ADD, &d) {
         // Explorer may not be ready yet (early autostart); TaskbarCreated will retry.
         log::warn!("tray: NIM_ADD failed");
@@ -143,7 +144,7 @@ pub fn create() -> Result<()> {
         balloon_icon: load_app_icon(large),
         taskbar_created,
         added: false,
-        last_balloon: String::new(),
+        last_file: None,
     };
     add_icon(&mut tr);
     TRAY.with(|t| *t.borrow_mut() = Some(tr));
@@ -154,6 +155,12 @@ pub fn create() -> Result<()> {
 
 /// Show a balloon/toast-style notification from the tray icon.
 pub fn notify(title: &str, text: &str, is_error: bool) {
+    notify_file(title, text, is_error, None);
+}
+
+/// [`notify`] about a file: clicking the balloon opens a video in the video editor and
+/// reveals anything else in Explorer.
+pub fn notify_file(title: &str, text: &str, is_error: bool, file: Option<PathBuf>) {
     if !is_error && !settings::get().general.show_notifications {
         return;
     }
@@ -176,7 +183,7 @@ pub fn notify(title: &str, text: &str, is_error: bool) {
         if !shell(NIM_MODIFY, &d) {
             log::warn!("tray: balloon failed: {title}: {text}");
         }
-        tr.last_balloon = text.to_string();
+        tr.last_file = file;
     });
 }
 
@@ -190,7 +197,7 @@ pub fn refresh() {
         }
         let mut d = base_data(tr.hwnd);
         d.uFlags = NIF_TIP | NIF_SHOWTIP;
-        copy_wide(&mut d.szTip, &t("tray-tooltip"));
+        copy_wide(&mut d.szTip, &tooltip());
         shell(NIM_MODIFY, &d);
     });
 }
@@ -214,21 +221,28 @@ pub fn remove() {
     }
 }
 
-/// If a "Saved to <path>" balloon was clicked, reveal the file.
+/// A balloon about a file was clicked: open a video in the video editor, reveal anything
+/// else (or its folder, when the file is gone).
 fn on_balloon_click() {
-    let text = TRAY.with(|t| t.try_borrow().ok().and_then(|t| t.as_ref().map(|t| t.last_balloon.clone())));
-    let Some(text) = text else { return };
-    let prefix = tf("notify-saved", &[("path", "")]);
-    if prefix.is_empty() {
-        return;
-    }
-    if let Some(path) = text.strip_prefix(&prefix) {
-        let p = std::path::Path::new(path.trim());
-        if p.exists() {
-            crate::common::win::reveal_in_explorer(p);
-        } else if let Some(dir) = p.parent().filter(|d| d.exists()) {
-            crate::common::win::shell_open(&dir.display().to_string());
+    let file = TRAY.with(|t| t.try_borrow().ok().and_then(|t| t.as_ref().and_then(|t| t.last_file.clone())));
+    let Some(p) = file else { return };
+    if p.exists() {
+        if crate::video_editor::accepts(&p) {
+            app::post(AppCommand::OpenVideoEditor(Some(p)));
+        } else {
+            crate::common::win::reveal_in_explorer(&p);
         }
+    } else if let Some(dir) = p.parent().filter(|d| d.exists()) {
+        crate::common::win::shell_open(&dir.display().to_string());
+    }
+}
+
+/// Tooltip text: names the region-capture hotkey when one is assigned.
+fn tooltip() -> String {
+    let parsed = crate::hotkeys::parse(settings::get().hotkeys.for_mode(settings::CaptureMode::Region));
+    match parsed {
+        Some(h) => tf("tray-tooltip", &[("hotkey", &crate::hotkeys::format(&h))]),
+        None => t("tray-tooltip-plain"),
     }
 }
 
