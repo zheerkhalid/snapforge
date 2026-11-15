@@ -11,6 +11,7 @@ mod capture;
 mod cli;
 mod common;
 mod controller;
+mod draw;
 mod editor;
 mod hotkeys;
 mod i18n;

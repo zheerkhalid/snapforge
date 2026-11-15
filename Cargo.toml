@@ -26,6 +26,10 @@ webp = { version = "0.3", default-features = false }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts", "accesskit"] }
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+# .sfcap project files (zip). Deflate via flate2 only (already in the tree for PNG); no zopfli/bzip2/zstd/aes.
+zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+# Needed by `#[windows::core::implement]` (DirectWrite text renderer / outline sink in src/draw).
+windows-core = "0.58"
 
 [dependencies.windows]
 version = "0.58"
@@ -37,8 +41,11 @@ features = [
     "Graphics_DirectX",
     "Graphics_DirectX_Direct3D11",
     "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_DirectWrite",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
