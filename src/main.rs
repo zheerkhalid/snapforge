@@ -23,6 +23,7 @@ mod ocr;
 mod output;
 mod overlay;
 mod pin;
+mod recorder;
 mod settings;
 mod settings_ui;
 mod toolbar;
