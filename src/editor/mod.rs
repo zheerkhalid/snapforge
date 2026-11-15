@@ -16,26 +16,142 @@
 //! * `jobs.rs`     – background decode / save / clipboard
 //! * `style.rs`    – visuals, accent colour, app icon
 //! * `window.rs`   – Win32 show / placement helpers
+//!
+//! Phase 2:
+//! * `history.rs`      – undo / redo steps with memory budget and background compression
+//! * `selection.rs`    – selections, screen ↔ image mapping, floating pixels, edge resize
+//! * `commands.rs`     – the command registry (menus, toolbar, shortcuts, palette), fuzzy matcher
+//! * `effects.rs`      – the effect table and parameter schema ([`EffectRegistry`])
+//! * `param_dialog.rs` – schema-driven effect dialog with debounced proxy preview
+//! * `ext.rs`          – extension traits: [`CanvasTool`], [`DocOverlay`], [`ToolsHost`]
+//! * `menus.rs`        – menu bar, ribbon toolbar, workspace strip
+//! * `modals.rs`       – dialogs (properties, delete, sequence save, editors, scan…)
+//! * `palette.rs`      – the command palette (Ctrl+K)
+//! * `fileops.rs`      – Recycle Bin, file properties, sequence names, file watcher
+//! * `scan.rs`, `scan_post.rs` – WIA 2.0 acquisition and scan post-processing
+//!
+//! EXTENSION (integration pass): [`register_effects`], [`register_canvas_tools`],
+//! [`set_tools_host`]; effects edit pixels through `Document::apply_image_edit`,
+//! `apply_region_edit`, `commit_image` and `commit_region` (one undo step each).
 
 mod app;
 mod canvas;
+mod commands;
 mod dialogs;
 mod document;
+mod effects;
+mod ext;
+mod fileops;
+mod history;
 mod jobs;
+mod menus;
+mod modals;
+mod palette;
+mod param_dialog;
+mod scan;
+mod scan_post;
+mod selection;
 mod style;
 mod texture;
 mod view;
 mod window;
+
+// The extension surface for the integration pass (effects, draw, tools); unused until then.
+#[allow(unused_imports)]
+pub use document::Document;
+#[allow(unused_imports)]
+pub use effects::{
+    downscale_proxy, ApplyFn, EffectCtx, EffectDef, EffectRegistry, MenuSlot, ParamDef, ParamKind, ParamValue,
+    ParamValues, Scope,
+};
+#[allow(unused_imports)]
+pub use ext::{CanvasTool, DocOverlay, ToolInput, ToolsContext, ToolsHost};
+#[allow(unused_imports)]
+pub use history::{Budget, StepKind};
+#[allow(unused_imports)]
+pub use selection::{CanvasMap, Selection};
 
 use crate::common::time::qpc_now;
 use crate::common::Image;
 use crate::settings::Destination;
 use eframe::egui;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicIsize, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Sender};
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
+
+/// Installs effects into the table (called on the editor thread, in registration order).
+pub type EffectInstaller = fn(&mut EffectRegistry);
+/// Creates the Phase 3 canvas tools.
+pub type ToolFactory = fn() -> Vec<Box<dyn CanvasTool>>;
+
+struct Extensions {
+    effects: Vec<EffectInstaller>,
+    tools: Vec<ToolFactory>,
+    host: Option<Arc<dyn ToolsHost>>,
+}
+
+static EXT: Mutex<Extensions> = Mutex::new(Extensions { effects: Vec::new(), tools: Vec::new(), host: None });
+/// Bumped on every registration so a running editor rebuilds its menus.
+static EXT_GEN: AtomicU64 = AtomicU64::new(1);
+
+fn ext_changed() {
+    EXT_GEN.fetch_add(1, Ordering::AcqRel);
+    let ctx = SHARED.ctx.lock().ok().and_then(|c| c.clone());
+    if let Some(ctx) = ctx {
+        ctx.request_repaint();
+    }
+}
+
+/// Register effects for the Image / Effects menus. `f` runs on the editor thread
+/// whenever the table is (re)built; an effect replaces the placeholder with its id.
+pub fn register_effects(f: EffectInstaller) {
+    if let Ok(mut e) = EXT.lock() {
+        e.effects.push(f);
+    }
+    ext_changed();
+}
+
+/// Register canvas tools (Phase 3 draw tools). They appear on the ribbon, in the Tools
+/// menu and in the command palette.
+pub fn register_canvas_tools(f: ToolFactory) {
+    if let Ok(mut e) = EXT.lock() {
+        e.tools.push(f);
+    }
+    ext_changed();
+}
+
+/// Replace the handler of Tools ▸ Combine Images / Convert Images to PDF / Batch Print.
+pub fn set_tools_host(h: Arc<dyn ToolsHost>) {
+    if let Ok(mut e) = EXT.lock() {
+        e.host = Some(h);
+    }
+    ext_changed();
+}
+
+pub(crate) fn ext_generation() -> u64 {
+    EXT_GEN.load(Ordering::Acquire)
+}
+
+/// The effect table with every registered installer applied.
+pub(crate) fn build_effects() -> EffectRegistry {
+    let mut r = EffectRegistry::with_placeholders();
+    let installers = EXT.lock().map(|e| e.effects.clone()).unwrap_or_default();
+    for f in installers {
+        f(&mut r);
+    }
+    r
+}
+
+pub(crate) fn build_tools() -> Vec<Box<dyn CanvasTool>> {
+    let factories = EXT.lock().map(|e| e.tools.clone()).unwrap_or_default();
+    factories.into_iter().flat_map(|f| f()).collect()
+}
+
+pub(crate) fn tools_host() -> Arc<dyn ToolsHost> {
+    EXT.lock().ok().and_then(|e| e.host.clone()).unwrap_or_else(|| Arc::new(ext::DefaultToolsHost))
+}
 
 /// Bench support: QPC timestamp of the first frame presented after the most recent
 /// [`open_image`] call.

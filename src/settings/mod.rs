@@ -3,6 +3,7 @@
 //! Global access: [`get`] for a read snapshot, [`update`] to mutate and persist.
 
 pub mod draw;
+pub mod editor_ext;
 pub mod filename;
 pub mod import_export;
 pub mod ocr;
@@ -540,6 +541,7 @@ pub struct Settings {
     pub hotkeys: HotkeySettings,
     pub toolbar: ToolbarSettings,
     pub editor: EditorSettings,
+    pub editor_ext: editor_ext::EditorExtSettings,
     pub draw: draw::DrawSettings,
     pub recorder: recorder::RecorderSettings,
     pub pin: pin::PinSettings,
