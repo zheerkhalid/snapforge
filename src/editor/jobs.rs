@@ -2,7 +2,7 @@
 //! external editors) so egui frames never wait on disk I/O or encoding. Results come
 //! back through a channel drained each frame.
 
-use super::document::DocId;
+use super::document::{DocId, ExportJob};
 use super::effects::{ApplyFn, EffectCtx, ParamValues};
 use super::fileops::{self, FileProps};
 use super::scan::{self, ScanError};
@@ -80,6 +80,51 @@ pub enum JobResult {
     Scanned(Result<(Image, String), ScanError>),
     ScanFinished,
     Printed(Result<bool, String>),
+    /// A `.sfcap` project was read.
+    ProjectLoaded {
+        path: PathBuf,
+        result: Result<(Image, Vec<crate::draw::Object>, crate::draw::Meta), String>,
+    },
+    ProjectSaved {
+        doc: DocId,
+        path: PathBuf,
+        revision: u64,
+        result: Result<(), String>,
+    },
+    /// An image file for the draw Image tool, encoded as PNG.
+    Picture {
+        doc: DocId,
+        at: crate::draw::Pt,
+        result: Result<(Vec<u8>, (u32, u32)), String>,
+    },
+    /// Show a message (e.g. a colour count).
+    Toast(String),
+}
+
+/// What an annotated project needs on disk (auto-save next to a saved image).
+#[derive(Clone)]
+pub struct ProjectData {
+    pub base: Arc<Image>,
+    pub objects: Vec<crate::draw::Object>,
+    pub meta: crate::draw::Meta,
+}
+
+/// Write `data` next to `image_path` (same stem, `.sfcap`); if that folder is not
+/// writable, into `<settings>/autosave`. Returns where it went.
+pub fn autosave_project(image_path: &std::path::Path, data: &ProjectData) -> Result<PathBuf, String> {
+    let next_to = image_path.with_extension(crate::draw::sfcap::EXTENSION);
+    match crate::draw::save_sfcap(&next_to, &data.base, &data.objects, &data.meta) {
+        Ok(()) => Ok(next_to),
+        Err(e) => {
+            log::debug!("editor: auto-save next to the image failed ({e:#}); using the settings folder");
+            let dir = crate::settings::dir().join("autosave");
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let name = next_to.file_name().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("autosave.sfcap"));
+            let p = dir.join(name);
+            crate::draw::save_sfcap(&p, &data.base, &data.objects, &data.meta).map_err(|e| format!("{e:#}"))?;
+            Ok(p)
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -139,19 +184,87 @@ impl Jobs {
         });
     }
 
-    pub fn save(&self, doc: DocId, image: Arc<Image>, path: PathBuf, revision: u64, close_after: bool) {
+    /// Flatten, encode and write; with `project`, also auto-save the annotations.
+    pub fn save(
+        &self,
+        doc: DocId,
+        image: ExportJob,
+        path: PathBuf,
+        revision: u64,
+        close_after: bool,
+        project: Option<ProjectData>,
+    ) {
         self.spawn("editor-save", move |j| {
             let t0 = std::time::Instant::now();
-            let result = output::save::save_image(&image, &path).map_err(|e| format!("{e:#}"));
+            let img = image.run();
+            let result = output::save::save_image(&img, &path).map_err(|e| format!("{e:#}"));
             log::debug!("editor: saved {} in {:?}", path.display(), t0.elapsed());
+            if let (Ok(()), Some(p)) = (&result, project) {
+                match autosave_project(&path, &p) {
+                    Ok(at) => log::info!("editor: annotations auto-saved to {}", at.display()),
+                    Err(e) => log::warn!("editor: annotation auto-save failed: {e}"),
+                }
+            }
             j.send(JobResult::Saved { doc, path, revision, close_after, result });
         });
     }
 
-    pub fn copy(&self, image: Arc<Image>) {
+    pub fn copy(&self, image: ExportJob) {
         self.spawn("editor-copy", move |j| {
-            let result = output::clipboard::copy_image(&image).map_err(|e| format!("{e:#}"));
+            let img = image.run();
+            let result = output::clipboard::copy_image(&img).map_err(|e| format!("{e:#}"));
             j.send(JobResult::Copied(result));
+        });
+    }
+
+    /// Flatten on a worker, then hand the pixels to `f` (deliver, pin…).
+    pub fn with_export(&self, image: ExportJob, f: impl FnOnce(Image) + Send + 'static) {
+        self.spawn("editor-export", move |_| {
+            let img = image.run();
+            f(Arc::try_unwrap(img).unwrap_or_else(|a| (*a).clone()));
+        });
+    }
+
+    pub fn load_project(&self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        self.spawn("editor-load-project", move |j| {
+            for path in paths {
+                let result = crate::draw::load_sfcap(&path).map_err(|e| format!("{e:#}"));
+                j.send(JobResult::ProjectLoaded { path, result });
+            }
+        });
+    }
+
+    pub fn save_project(&self, doc: DocId, data: ProjectData, path: PathBuf, revision: u64) {
+        self.spawn("editor-save-project", move |j| {
+            let result =
+                crate::draw::save_sfcap(&path, &data.base, &data.objects, &data.meta).map_err(|e| format!("{e:#}"));
+            j.send(JobResult::ProjectSaved { doc, path, revision, result });
+        });
+    }
+
+    /// Decode an image file and encode it as PNG for an image object.
+    pub fn load_picture(&self, doc: DocId, path: PathBuf, at: crate::draw::Pt) {
+        self.spawn("editor-picture", move |j| {
+            let result = output::save::load_image(&path).map_err(|e| format!("{e:#}")).and_then(|img| encode_png(&img));
+            j.send(JobResult::Picture { doc, at, result });
+        });
+    }
+
+    /// Encode an in-memory image (pasted) as an image object.
+    pub fn picture_from_image(&self, doc: DocId, img: Image, at: crate::draw::Pt) {
+        self.spawn("editor-picture", move |j| {
+            let result = encode_png(&img);
+            j.send(JobResult::Picture { doc, at, result });
+        });
+    }
+
+    pub fn count_colors(&self, image: Arc<Image>) {
+        self.spawn("editor-count-colors", move |j| {
+            let n = crate::effects::count_colors(&image);
+            j.send(JobResult::Toast(crate::i18n::tf("fx-count-colors-result", &[("count", &n.to_string())])));
         });
     }
 
@@ -203,7 +316,17 @@ impl Jobs {
         self.spawn("editor-effect", move |j| {
             let t0 = std::time::Instant::now();
             let ctx = EffectCtx { scale: 1.0, preview: false, background };
-            let result = apply(&source, &values, &ctx);
+            let mut result = apply(&source, &values, &ctx);
+            // A freehand selection: blend through its mask (soft-edged masks blend partially).
+            if let EffectTarget::Region(r, Some(mask)) = &target {
+                if (result.width, result.height) == (source.width, source.height)
+                    && mask.len() == (r.w.max(0) * r.h.max(0)) as usize
+                    && (source.width as i32, source.height as i32) == (r.w, r.h)
+                {
+                    let m = crate::effects::Mask { width: source.width, height: source.height, data: (**mask).clone() };
+                    result = crate::effects::apply_masked(&source, &result, &m);
+                }
+            }
             log::debug!("editor: effect {name} took {:?}", t0.elapsed());
             j.send(JobResult::EffectApplied { doc, name, target, result });
         });
@@ -260,10 +383,22 @@ impl Jobs {
         });
     }
 
-    pub fn print(&self, image: Arc<Image>, owner: isize, title: String) {
+    pub fn print(&self, image: ExportJob, owner: isize, title: String) {
         self.spawn("editor-print", move |j| {
+            let image = image.run();
             let r = output::print::print_image(&image, owner, &title).map_err(|e| format!("{e:#}"));
             j.send(JobResult::Printed(r));
         });
     }
+}
+
+/// PNG bytes and size of an image (for draw image objects).
+pub fn encode_png(img: &Image) -> Result<(Vec<u8>, (u32, u32)), String> {
+    use image::ImageEncoder;
+    let rgba = img.to_rgba_straight();
+    let mut out = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut out)
+        .write_image(&rgba, img.width, img.height, image::ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
+    Ok((out, (img.width, img.height)))
 }

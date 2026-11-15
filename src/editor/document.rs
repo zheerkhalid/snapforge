@@ -80,6 +80,10 @@ pub struct Document {
     pub overlay: Option<Box<dyn DocOverlay>>,
     /// Workspace this tab belongs to.
     pub workspace: u64,
+    /// The `.sfcap` project this document was opened from or last saved to.
+    pub project: Option<PathBuf>,
+    /// Pixels before the live brush stroke in progress.
+    live_before: Option<Arc<Image>>,
     /// Bumped whenever the selection changes (statistics refresh).
     pub selection_version: u64,
 }
@@ -146,6 +150,8 @@ impl Document {
             floating: None,
             overlay: None,
             workspace: 0,
+            project: None,
+            live_before: None,
             selection_version: 0,
         }
     }
@@ -276,6 +282,32 @@ impl Document {
                 }
             }
         })
+    }
+
+    /// Pixels to modify live during a brush stroke (clone stamp). Call
+    /// [`Document::mark_region_dirty`] for what changed and [`Document::end_live_edit`] when
+    /// the stroke ends: the whole stroke becomes one undo step.
+    pub fn live_pixels(&mut self) -> &mut Image {
+        if self.live_before.is_none() {
+            self.drop_floating_commit();
+            self.live_before = Some(self.image.clone());
+        }
+        Arc::make_mut(&mut self.image)
+    }
+
+    pub fn mark_region_dirty(&mut self, r: Rect) {
+        self.tex_dirty = self.tex_dirty.add(r.intersect(&self.image.bounds()));
+    }
+
+    /// Record the live stroke as one undo step (false if nothing changed).
+    pub fn end_live_edit(&mut self, name: &str) -> bool {
+        let Some(before) = self.live_before.take() else { return false };
+        let after = std::mem::replace(&mut self.image, before);
+        let ok = self.commit_image(name, (*after).clone());
+        if !ok {
+            self.image = after;
+        }
+        ok
     }
 
     /// The annotation layer changed; record a marker so Ctrl+Z reaches it.
@@ -546,6 +578,37 @@ impl Document {
         self.set_selection(None);
     }
 
+    /// What save / copy / print / pin need, without flattening on this thread: the pixels
+    /// (with floating pixels stamped) plus the layer's detached flattener, optionally
+    /// limited to the selection. [`ExportJob::run`] does the work on a worker.
+    pub fn export_job(&self, selection_only: bool) -> ExportJob {
+        let base = match &self.floating {
+            Some(f) => {
+                let mut img = (*self.image).clone();
+                f.stamp(&mut img);
+                Arc::new(img)
+            }
+            None => self.image.clone(),
+        };
+        let select = if selection_only { self.selection.clone() } else { None };
+        ExportJob { base, flatten: self.overlay.as_ref().and_then(|o| o.flattener()), select, crop: None }
+    }
+
+    /// The annotation layer has objects.
+    pub fn has_annotations(&self) -> bool {
+        self.overlay.as_ref().is_some_and(|o| !o.is_empty())
+    }
+
+    /// A project (.sfcap) save of state `revision` finished.
+    pub fn on_project_saved(&mut self, path: PathBuf, revision: u64) {
+        if self.path.is_none() {
+            self.title = file_title(&path);
+            self.saved_revision = Some(revision);
+            self.refresh_dirty();
+        }
+        self.project = Some(path);
+    }
+
     /// The pixels to save / copy: the image plus floating pixels and any annotation layer.
     pub fn composited(&self) -> Arc<Image> {
         if self.overlay.is_none() && self.floating.is_none() {
@@ -567,6 +630,7 @@ impl Document {
             return (*f.image).clone();
         }
         match &self.selection {
+            Some(s) if self.has_annotations() => s.extract(&self.composited()),
             Some(s) => s.extract(&self.image),
             None => (*self.composited()).clone(),
         }
@@ -602,6 +666,38 @@ impl Document {
 
     pub fn size(&self) -> [f32; 2] {
         [self.image.width as f32, self.image.height as f32]
+    }
+}
+
+/// Pixels for an export, flattened on a worker thread.
+#[derive(Clone)]
+pub struct ExportJob {
+    pub base: Arc<Image>,
+    pub flatten: Option<super::ext::Flattener>,
+    /// Limit to this selection (freehand outside transparent).
+    pub select: Option<Selection>,
+    /// Limit to this rectangle (floating pixels).
+    pub crop: Option<Rect>,
+}
+
+impl ExportJob {
+    pub fn ready(img: Arc<Image>) -> Self {
+        Self { base: img, flatten: None, select: None, crop: None }
+    }
+
+    /// Flatten (and crop). May take a while for big annotated images: call off the UI thread.
+    pub fn run(&self) -> Arc<Image> {
+        let full = match &self.flatten {
+            Some(f) => Arc::new(f(&self.base)),
+            None => self.base.clone(),
+        };
+        if let Some(r) = self.crop {
+            return Arc::new(full.crop(r.intersect(&full.bounds())));
+        }
+        match &self.select {
+            Some(s) => Arc::new(s.extract(&full)),
+            None => full,
+        }
     }
 }
 

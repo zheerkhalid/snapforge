@@ -93,6 +93,15 @@ pub enum Action {
     // help
     About,
     Shortcuts,
+    // integration
+    SaveProject,
+    /// Next (+1) / previous (-1) draw tool.
+    CycleTool(i32),
+    /// Move the selected annotations (image pixels).
+    Nudge(i32, i32),
+    DuplicateObjects,
+    ToggleDrawPalette,
+    Settings,
 }
 
 // ---------------------------------------------------------------- shortcuts
@@ -259,6 +268,10 @@ pub struct CmdState {
     pub busy: bool,
     pub can_continue: bool,
     pub workspaces: bool,
+    /// Annotations are selected.
+    pub has_objects: bool,
+    /// The document has annotations.
+    pub has_annotations: bool,
 }
 
 pub type Enabled = fn(&CmdState) -> bool;
@@ -295,6 +308,13 @@ pub fn can_continue(s: &CmdState) -> bool {
 }
 pub fn workspaces_on(s: &CmdState) -> bool {
     s.workspaces
+}
+pub fn has_objects(s: &CmdState) -> bool {
+    s.has_doc && s.has_objects && !s.busy
+}
+/// A pixel selection or selected annotations.
+pub fn can_delete(s: &CmdState) -> bool {
+    s.has_doc && (s.has_selection || s.has_objects) && !s.busy
 }
 
 #[derive(Clone)]

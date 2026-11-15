@@ -43,6 +43,11 @@ pub fn build_registry(
     add(Command::new("file.save_sequence", t("editor-save-sequence"), K::File, Action::SaveAllSequence)
         .when(c::has_doc)
         .keywords("numbered batch base name"));
+    add(Command::new("file.save_project", t("draw-save-project"), K::File, Action::SaveProject)
+        .key("Ctrl+Alt+S")
+        .icon("🗐")
+        .when(c::has_doc)
+        .keywords("sfcap annotations editable project"));
     add(Command::new("file.print", t("editor-print"), K::File, Action::Print).key("Ctrl+P").icon("🖶").when(c::has_doc));
     add(Command::new("file.scan", t("editor-scan"), K::File, Action::Scan)
         .icon("📠")
@@ -107,7 +112,27 @@ pub fn build_registry(
         .when(c::has_selection));
     add(Command::new("edit.delete", t("editor-delete-selection"), K::Select, Action::DeleteSelection)
         .key("Del")
-        .when(c::has_selection));
+        .when(c::can_delete));
+    add(Command::new("draw.duplicate", t("draw-duplicate"), K::Edit, Action::DuplicateObjects)
+        .key("Ctrl+J")
+        .icon("⧉")
+        .when(c::has_objects));
+    for (id, key, dx, dy) in [
+        ("draw.nudge_left", "ArrowLeft", -1, 0),
+        ("draw.nudge_right", "ArrowRight", 1, 0),
+        ("draw.nudge_up", "ArrowUp", 0, -1),
+        ("draw.nudge_down", "ArrowDown", 0, 1),
+        ("draw.nudge_left10", "Shift+ArrowLeft", -10, 0),
+        ("draw.nudge_right10", "Shift+ArrowRight", 10, 0),
+        ("draw.nudge_up10", "Shift+ArrowUp", 0, -10),
+        ("draw.nudge_down10", "Shift+ArrowDown", 0, 10),
+    ] {
+        add(Command::new(id, t("draw-nudge"), K::Edit, Action::Nudge(dx, dy)).key(key).when(c::has_objects).hidden());
+    }
+    add(Command::new("draw.next_tool", t("draw-next-tool"), K::Tools, Action::CycleTool(1)).key("Tab").when(c::has_doc));
+    add(Command::new("draw.prev_tool", t("draw-prev-tool"), K::Tools, Action::CycleTool(-1))
+        .key("Shift+Tab")
+        .when(c::has_doc));
     add(Command::new("edit.crop", t("editor-crop"), K::Select, Action::CropToSelection)
         .key("Ctrl+T")
         .icon("⛶")
@@ -160,6 +185,10 @@ pub fn build_registry(
         .keywords("merge join stitch"));
     add(Command::new("tools.pdf", t("editor-tool-pdf"), K::Tools, Action::ImagesToPdf).icon("📄"));
     add(Command::new("tools.batch_print", t("editor-tool-batch-print"), K::Tools, Action::BatchPrint).icon("🖶"));
+    add(Command::new("tools.settings", t("editor-settings"), K::Tools, Action::Settings)
+        .key("Ctrl+,")
+        .icon("⚙")
+        .keywords("options preferences configure"));
     add(Command::new("tools.palette", t("editor-palette"), K::Tools, Action::Palette)
         .key("Ctrl+K")
         .icon("🔍")
@@ -209,6 +238,8 @@ pub fn build_registry(
         .keywords("group tabs"));
     add(Command::new("view.new_workspace", t("editor-workspace-new"), K::View, Action::NewWorkspace)
         .keywords("group tabs"));
+    add(Command::new("view.draw_palette", t("draw-palette-toggle"), K::View, Action::ToggleDrawPalette)
+        .keywords("draw tools annotate sidebar"));
 
     // Help
     add(Command::new("help.shortcuts", t("editor-shortcuts"), K::Help, Action::Shortcuts).key("F1").icon("⌨"));
