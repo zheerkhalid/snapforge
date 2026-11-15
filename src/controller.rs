@@ -148,6 +148,8 @@ fn run(cli: Cli) -> anyhow::Result<()> {
 
     message_loop();
 
+    crate::tools::close_all();
+    crate::pin::close_all();
     hotkeys::stop();
     tray::remove();
     editor::shutdown();
@@ -422,7 +424,9 @@ fn refresh_ui() {
 // ------------------------------------------------------------------ capture flows
 
 fn our_windows() -> Vec<isize> {
-    vec![toolbar::hwnd(), app::app_hwnd(), overlay::overlay_hwnd()].into_iter().filter(|&h| h != 0).collect()
+    let mut v = vec![toolbar::hwnd(), app::app_hwnd(), overlay::overlay_hwnd()];
+    v.extend(crate::tools::tool_hwnds());
+    v.into_iter().filter(|&h| h != 0).collect()
 }
 
 fn start_capture(req: CaptureRequest) {

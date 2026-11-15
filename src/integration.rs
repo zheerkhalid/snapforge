@@ -20,6 +20,7 @@ pub fn execute(cmd: AppCommand) {
                 crate::ocr::capture_text_flow(img);
             }
         }
+        AppCommand::ScreenTool(t) => crate::tools::open(t),
         _ => log::info!("command not available yet"),
     }
 }
