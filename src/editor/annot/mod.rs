@@ -10,7 +10,10 @@
 pub mod keys;
 pub mod layer;
 mod palette;
+#[cfg(test)]
+mod preview;
 mod props;
+pub mod size;
 mod widgets;
 
 use super::document::{DocId, Document};
@@ -27,6 +30,7 @@ use crate::settings::{self, draw::ToolStyle};
 use eframe::egui::{self, pos2, vec2, Color32, CursorIcon, Stroke};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 pub use palette::{palette_panel, PaletteAction};
 pub use props::properties_bar;
@@ -163,7 +167,17 @@ pub struct DrawState {
     drag_moved: bool,
     /// Canvas mapping when the button went down (drags keep using it).
     press_map: Option<CanvasMap>,
+    /// The pointer shows the tool's own cursor (not a handle / move cursor), so the brush
+    /// tip may be painted there.
+    tip_on: bool,
+    /// The size label shown for a moment after `[` / `]` / the wheel.
+    flash: Option<size::Flash>,
+    /// Last key / wheel resize of selected objects: a burst of them is one undo step.
+    gesture_at: Option<Instant>,
 }
+
+/// A pause this long ends a burst of key / wheel resizes of selected objects.
+const GESTURE_PAUSE: Duration = Duration::from_millis(600);
 
 impl Default for DrawState {
     fn default() -> Self {
@@ -188,6 +202,9 @@ impl Default for DrawState {
             recent: Vec::new(),
             drag_moved: false,
             press_map: None,
+            tip_on: false,
+            flash: None,
+            gesture_at: None,
         }
     }
 }
@@ -258,10 +275,9 @@ impl DrawState {
         let scale = input.map.scale.max(1e-4);
         self.hover = input.hovered.then_some(p);
 
-        if tool == Tool::Eraser && input.scroll != 0.0 {
-            let o = &mut self.style_for(tool).options;
-            let r = o.eraser_radius;
-            o.eraser_radius = (r * if input.scroll > 0.0 { 1.15 } else { 1.0 / 1.15 }).clamp(1.0, 500.0);
+        // The wheel (eraser) or Alt+wheel (every sized tool) changes the size.
+        if input.scroll != 0.0 && (tool == Tool::Eraser || input.modifiers.alt) {
+            self.resize_by(tool, doc, if input.scroll > 0.0 { 1 } else { -1 });
         }
 
         // While the button is held, map the pointer with the canvas mapping of the press:
@@ -280,6 +296,8 @@ impl DrawState {
                 }
                 return;
             }
+            // A resize burst still open is its own undo step, before this gesture's.
+            self.commit_props(doc);
             self.press_map = Some(input.map);
             self.press(tool, doc, p, input);
         } else if input.down {
@@ -300,9 +318,10 @@ impl DrawState {
 
     fn update_cursor(&mut self, tool: Tool, doc: &Document, p: Pt, scale: f32) {
         self.hover_obj = None;
+        self.tip_on = self.pick.is_none();
         self.cursor = if self.pick.is_some() {
             CursorIcon::Crosshair
-        } else if tool == Tool::Eraser {
+        } else if self.brush_hides_cursor(tool, scale) {
             CursorIcon::None
         } else if tool == Tool::Text {
             CursorIcon::Text
@@ -314,17 +333,20 @@ impl DrawState {
         if self.sel.len() == 1 {
             if let Some(h) = find(objs, self.sel[0]).and_then(|o| handle_at(o, p, 7.0 / scale, scale)) {
                 self.cursor = handle_cursor(h);
+                self.tip_on = false;
                 return;
             }
         }
         if matches!(self.drag, Drag::Move { .. }) {
             self.cursor = CursorIcon::Grabbing;
+            self.tip_on = false;
             return;
         }
         if tool == Tool::Select || self.sel.iter().any(|id| Some(*id) == hit_test(objs, p, 5.0 / scale)) {
             if let Some(id) = hit_test(objs, p, 5.0 / scale) {
                 self.hover_obj = Some(id);
                 self.cursor = CursorIcon::Move;
+                self.tip_on = false;
             } else if tool == Tool::Select {
                 self.cursor = CursorIcon::Default;
             }
@@ -442,7 +464,10 @@ impl DrawState {
         };
         let Some(obj) = obj else { return };
         l.objects_mut().push(obj);
-        self.sel = vec![id];
+        // Brush strokes do not become the selection: the next stroke may start on top of
+        // this one (a selected object would be moved instead), and the size controls keep
+        // meaning "the brush". Pick them with the Select tool to edit them.
+        self.sel = if tool.is_freehand() { Vec::new() } else { vec![id] };
         if tool.is_multi_point() {
             self.poly = Some(Poly { doc: doc.id, id, tool, before: objs });
         } else if tool.is_freehand() {
@@ -830,11 +855,145 @@ impl DrawState {
             painter.rect_filled(r, 0.0, ACCENT.gamma_multiply(0.12));
             painter.rect_stroke(r, 0.0, Stroke::new(1.0_f32, ACCENT), egui::StrokeKind::Inside);
         }
-        if tool == Tool::Eraser {
-            if let Some(h) = self.hover {
-                let r = self.styles.get(&Tool::Eraser).map(|s| s.options.eraser_radius).unwrap_or(10.0) * scale;
-                painter.circle_stroke(to(h), r.max(2.0), Stroke::new(2.5_f32, Color32::from_black_alpha(140)));
-                painter.circle_stroke(to(h), r.max(2.0), Stroke::new(1.0_f32, Color32::WHITE));
+        self.paint_tip(tool, painter, map);
+    }
+
+    /// The tool's size at the pointer (brush ring, stamp outline or stroke dot) and the
+    /// size label after a resize.
+    fn paint_tip(&mut self, tool: Tool, painter: &egui::Painter, map: &CanvasMap) {
+        let ctx = painter.ctx().clone();
+        let clip = painter.clip_rect();
+        let flash = self.flash.as_ref().and_then(|f| f.text(&ctx)).map(str::to_owned);
+        if flash.is_none() {
+            self.flash = None;
+        }
+        // `hover` is only refreshed while the pointer is over the canvas, so ask egui too.
+        let pointer = ctx.input(|i| i.pointer.hover_pos()).filter(|p| clip.contains(*p) && self.hover.is_some());
+        let drawing = !matches!(self.drag, Drag::None);
+        // The tip always shows the tool's own size: what the next stroke will be.
+        let spec = size::spec(tool).filter(|s| s.tip != size::Tip::None);
+        let mut radius = 0.0;
+        // Not over handles and movable objects; while resizing away from the canvas,
+        // preview in its middle.
+        let at = match pointer {
+            Some(p) => self.tip_on.then_some(p),
+            None => flash.is_some().then(|| clip.center()),
+        };
+        if let (Some(spec), Some(c)) = (spec, at) {
+            let ts = self.style_for(tool).clone();
+            let d = size::screen_diameter(spec.diameter(size::get(&ts, spec.field)), map.scale);
+            let r = d / 2.0;
+            match spec.tip {
+                size::Tip::Brush => {
+                    if tool != Tool::Eraser {
+                        let col = if tool == Tool::LineHighlighter { ts.style.fill } else { ts.style.color };
+                        let tint = Color32::from_rgba_unmultiplied(col.r, col.g, col.b, 56);
+                        painter.circle_filled(c, r.max(1.0), tint);
+                    }
+                    size::paint_ring(painter, c, r);
+                    if size::hides_cursor(d) {
+                        size::paint_center(painter, c);
+                    }
+                    radius = r;
+                }
+                size::Tip::Stamp if !drawing => {
+                    match ts.options.step_shape {
+                        draw::StepShape::Square => size::paint_square(painter, c, r, (r * 0.2).min(8.0)),
+                        _ => size::paint_ring(painter, c, r),
+                    }
+                    radius = r;
+                }
+                size::Tip::Dot if !drawing && d > 0.0 => {
+                    // Beside the crosshair, never under it.
+                    let k = 12.0 + r * std::f32::consts::FRAC_1_SQRT_2;
+                    let dc = c + vec2(k, k);
+                    let col = ts.style.color;
+                    painter.circle_filled(dc, r.max(0.5), Color32::from_rgba_unmultiplied(col.r, col.g, col.b, 255));
+                    size::paint_ring(painter, dc, r + 1.5);
+                    radius = k + r;
+                }
+                _ => {}
+            }
+        }
+        if let Some(text) = flash {
+            size::paint_label(painter, at.or(pointer).unwrap_or(clip.center()), radius, &text);
+        }
+    }
+
+    /// The brush ring replaces the system cursor (it is large enough to aim with).
+    fn brush_hides_cursor(&mut self, tool: Tool, scale: f32) -> bool {
+        let Some(spec) = size::spec(tool).filter(|s| s.tip == size::Tip::Brush) else { return false };
+        let v = size::get(self.style_for(tool), spec.field);
+        size::hides_cursor(size::screen_diameter(spec.diameter(v), scale))
+    }
+
+    // ------------------------------------------------------------------ size gestures
+
+    /// What the size controls act on, with its spec: the kind of the selected objects if
+    /// any, else the tool.
+    pub fn size_target(&mut self, tool: Tool, doc: &Document) -> Option<(Tool, size::SizeSpec)> {
+        self.sync_doc(doc);
+        let first = layer::layer(doc).and_then(|l| l.objects().iter().find(|o| self.sel.contains(&o.id)));
+        let kind = first.map(Tool::of).unwrap_or(tool);
+        size::spec(kind).map(|s| (kind, s))
+    }
+
+    /// `[` / `]` / wheel: grow (`steps > 0`) or shrink the size of the selected objects,
+    /// or of the tool when nothing is selected, and flash the new size at the pointer.
+    /// A burst of steps on selected objects is one undo step. Returns true if the tool or
+    /// selection has a size.
+    pub fn resize_by(&mut self, tool: Tool, doc: &mut Document, steps: i32) -> bool {
+        if self.editing.is_some() || steps == 0 {
+            return false;
+        }
+        let Some((kind, spec)) = self.size_target(tool, doc) else { return false };
+        let sel = self.sel.clone();
+        let objs: Vec<Object> = layer::layer(doc).map(|l| l.objects().to_vec()).unwrap_or_default();
+        let value = match objs.iter().find(|o| sel.contains(&o.id)) {
+            None => {
+                let ts = self.style_for(kind);
+                let v = spec.step(size::get(ts, spec.field), steps);
+                size::set(ts, spec.field, v);
+                v
+            }
+            Some(first) => {
+                let base = self.style_for(kind).options.clone();
+                let orig = ToolStyle { style: first.style.clone(), options: draw::tools::options_of(first, &base) };
+                let v = spec.step(size::get(&orig, spec.field), steps);
+                let mut new = orig.clone();
+                size::set(&mut new, spec.field, v);
+                if new != orig {
+                    if self.prop_before.is_none() {
+                        self.prop_before = Some((doc.id, objs.clone()));
+                    }
+                    if let Some(l) = layer::layer_mut(doc) {
+                        for o in l.objects_mut().iter_mut().filter(|o| sel.contains(&o.id)) {
+                            props::apply_diff(o, &orig, &new);
+                        }
+                    }
+                    // New objects of this kind follow, like edits in the properties bar.
+                    size::set(self.style_for(kind), spec.field, v);
+                    self.gesture_at = Some(Instant::now());
+                }
+                v
+            }
+        };
+        self.flash = Some(size::Flash::new(spec.label(value)));
+        true
+    }
+
+    /// A key / wheel resize burst of selected objects is still going on (its undo step is
+    /// recorded when it pauses). Asks for a repaint when the pause is due.
+    pub fn gesture_pending(&mut self, ctx: &egui::Context) -> bool {
+        let Some(at) = self.gesture_at else { return false };
+        match (at + GESTURE_PAUSE).checked_duration_since(Instant::now()) {
+            Some(left) if self.prop_before.is_some() => {
+                ctx.request_repaint_after(left + Duration::from_millis(20));
+                true
+            }
+            _ => {
+                self.gesture_at = None;
+                false
             }
         }
     }
@@ -953,8 +1112,17 @@ impl DrawState {
         ok
     }
 
+    /// An action other than a resize step ends a key / wheel resize burst (undo must not
+    /// run into a step that is still open).
+    pub fn end_gesture(&mut self, doc: &mut Document) {
+        if self.gesture_at.is_some() {
+            self.commit_props(doc);
+        }
+    }
+
     /// Record a property edit that has finished (pointer released).
     pub fn commit_props(&mut self, doc: &mut Document) {
+        self.gesture_at = None;
         if let Some((d, before)) = self.prop_before.take() {
             if d == doc.id {
                 layer::commit(doc, &t("draw-step-style"), &before);
@@ -1103,6 +1271,13 @@ impl CanvasTool for DrawTool {
     }
     fn wants_wheel(&self) -> bool {
         self.tool == Tool::Eraser
+    }
+    fn wants_alt_wheel(&self) -> bool {
+        true
+    }
+    fn resize(&mut self, doc: &mut Document, steps: i32) -> bool {
+        let tool = self.tool;
+        with_state(|s| s.resize_by(tool, doc, steps))
     }
     fn on_ribbon(&self) -> bool {
         false

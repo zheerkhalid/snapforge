@@ -135,6 +135,8 @@ pub fn build_registry(
     add(Command::new("draw.prev_tool", t("draw-prev-tool"), K::Tools, Action::CycleTool(-1))
         .key("Shift+Tab")
         .when(c::has_doc));
+    add(Command::new("draw.size_down", t("draw-size-down"), K::Tools, Action::ToolSize(-1)).key("[").when(c::has_doc));
+    add(Command::new("draw.size_up", t("draw-size-up"), K::Tools, Action::ToolSize(1)).key("]").when(c::has_doc));
     add(Command::new("edit.crop", t("editor-crop"), K::Select, Action::CropToSelection)
         .key("Ctrl+T")
         .icon("⛶")

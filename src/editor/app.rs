@@ -786,6 +786,11 @@ impl EditorApp {
 
     pub(super) fn run_action(&mut self, ctx: &egui::Context, a: Action) {
         let active = self.tabs.active_id();
+        if !matches!(a, Action::ToolSize(_)) {
+            if let Some(d) = self.tabs.active_mut() {
+                annot::with_state(|s| s.end_gesture(d));
+            }
+        }
         match a {
             Action::Open => {
                 let folder = default_folder();
@@ -1018,6 +1023,16 @@ impl EditorApp {
             Action::Nudge(dx, dy) => {
                 if let Some(d) = self.tabs.active_mut() {
                     annot::with_state(|s| s.nudge(d, dx as f32, dy as f32));
+                }
+            }
+            Action::ToolSize(steps) => {
+                // An interactive effect session owns the canvas while it is open.
+                let fx_open = self.fx.as_ref().is_some_and(|f| Some(f.doc) == active);
+                if let (false, ToolId::External(id)) = (fx_open, &self.tool) {
+                    let tool = self.ext_tools.iter_mut().find(|t| t.id() == id);
+                    if let (Some(t), Some(d)) = (tool, self.tabs.active_mut()) {
+                        t.resize(d, steps);
+                    }
                 }
             }
             Action::DuplicateObjects => {

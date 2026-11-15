@@ -89,7 +89,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
     let mut out = CanvasOutput { painted: false, hover_px: None, edited: None };
 
     // ---- zoom / scroll
-    let tool_wheel = cx.external.as_ref().is_some_and(|t| t.wants_wheel());
+    let alt = ctx.input(|i| i.modifiers.alt && !i.modifiers.ctrl && !i.modifiers.command);
+    let tool_wheel = cx.external.as_ref().is_some_and(|t| t.wants_wheel() || alt && t.wants_alt_wheel());
     let mut tool_scroll = 0.0;
     if resp.hovered() {
         let (zoom, scroll, pointer) = ctx.input(|i| (i.zoom_delta(), i.smooth_scroll_delta, i.pointer.hover_pos()));

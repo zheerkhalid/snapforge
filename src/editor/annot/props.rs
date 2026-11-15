@@ -3,6 +3,7 @@
 //! z-order.
 
 use super::layer;
+use super::size::{self, SizeField, SizeSpec};
 use super::widgets::{color_box, dash_preview, head_preview, tool_icon, PickFrom};
 use super::{tool_label, ColorSlot, DrawState, Order};
 use crate::draw::edit::{Align, StylePatch};
@@ -138,7 +139,19 @@ pub fn properties_bar(
         }
         if c.width {
             ui.label(RichText::new(t("draw-prop-width")).color(muted));
-            ui.add(egui::DragValue::new(&mut s.width).range(0.0..=100.0).speed(0.2).max_decimals(1).suffix(" px"));
+            match size::spec(kind).filter(|sp| sp.field == SizeField::Width) {
+                // The width is this tool's size: slider, exact value and a dot that thick.
+                Some(sp) => {
+                    let ink = if kind == Tool::LineHighlighter { s.fill } else { s.color };
+                    let dot = Color32::from_rgb(ink.r, ink.g, ink.b);
+                    size_control(ui, &mut s.width, &sp, Some(dot), &t("draw-size-tip"));
+                }
+                None => {
+                    ui.add(
+                        egui::DragValue::new(&mut s.width).range(0.0..=100.0).speed(0.2).max_decimals(1).suffix(" px"),
+                    );
+                }
+            }
         }
         if c.dash {
             egui::ComboBox::from_id_salt("draw-dash").width(78.0).selected_text(dash_label(s.dash)).show_ui(ui, |ui| {
@@ -203,8 +216,9 @@ pub fn properties_bar(
             sep(ui, pal);
             let s = &mut proto.style;
             font_combo(ui, st, &mut s.font.family, pal.dark);
+            let tip = if kind == Tool::Step { t("draw-prop-font-size") } else { t("draw-font-size-tip") };
             ui.add(egui::DragValue::new(&mut s.font.size).range(1.0..=200.0).speed(0.25).max_decimals(1).suffix(" pt"))
-                .on_hover_text(t("draw-prop-font-size"));
+                .on_hover_text(tip);
             ui.toggle_value(&mut s.font.bold, RichText::new("B").strong()).on_hover_text(t("draw-prop-bold"));
             ui.toggle_value(&mut s.font.italic, RichText::new("I").italics()).on_hover_text(t("draw-prop-italic"));
             ui.toggle_value(&mut s.font.underline, RichText::new("U").underline())
@@ -383,10 +397,29 @@ pub fn properties_bar(
             }
         }
     }
-    if !ui.input(|i| i.pointer.any_down()) {
+    // A burst of `[` / `]` / wheel steps stays open until it pauses.
+    if !ui.input(|i| i.pointer.any_down()) && !st.gesture_pending(ui.ctx()) {
         st.commit_props(doc);
     }
     remember_when_idle(ui, st, kind);
+}
+
+/// A tool's size: slider, exact value field and (optionally) a dot of that size.
+fn size_control(ui: &mut egui::Ui, v: &mut f32, sp: &SizeSpec, dot: Option<Color32>, tip: &str) {
+    size::slider(ui, v, sp).on_hover_text(tip);
+    let (speed, decimals) = if sp.decimals() { (0.2, 1) } else { (0.3, 0) };
+    ui.add(
+        egui::DragValue::new(v)
+            .range(sp.min..=sp.max)
+            .speed(speed)
+            .max_decimals(decimals)
+            .custom_formatter(|n, _| size::format_value(n as f32))
+            .suffix(" px"),
+    )
+    .on_hover_text(tip);
+    if let Some(c) = dot {
+        size::preview_dot(ui, sp.diameter(*v), c).on_hover_text(t("draw-size-preview"));
+    }
 }
 
 enum Act {
@@ -688,7 +721,18 @@ fn kind_options(
             }
             ui.toggle_value(&mut o.step_letters, "A B C").on_hover_text(t("draw-prop-step-letters"));
             lbl(ui, "draw-prop-size");
-            ui.add(egui::DragValue::new(&mut o.step_size).range(8.0..=400.0).speed(0.3).max_decimals(0).suffix(" px"));
+            match size::spec(kind) {
+                Some(sp) => size_control(ui, &mut o.step_size, &sp, None, &t("draw-size-tip")),
+                None => {
+                    ui.add(
+                        egui::DragValue::new(&mut o.step_size)
+                            .range(8.0..=400.0)
+                            .speed(0.3)
+                            .max_decimals(0)
+                            .suffix(" px"),
+                    );
+                }
+            }
         }
         Tool::Emoji => {
             sep(ui, pal);
@@ -736,18 +780,39 @@ fn kind_options(
         Tool::Blur | Tool::Pixelate => {
             sep(ui, pal);
             lbl(ui, "draw-prop-strength");
-            ui.add(
-                egui::DragValue::new(&mut o.blur_strength).range(1.0..=80.0).speed(0.2).max_decimals(0).suffix(" px"),
-            );
+            match size::spec(kind) {
+                Some(sp) => size_control(ui, &mut o.blur_strength, &sp, None, &t("draw-size-tip")),
+                None => {
+                    ui.add(
+                        egui::DragValue::new(&mut o.blur_strength)
+                            .range(1.0..=80.0)
+                            .speed(0.2)
+                            .max_decimals(0)
+                            .suffix(" px"),
+                    );
+                }
+            }
             ui.toggle_value(&mut o.blur_ellipse, t("draw-shape-oval"));
         }
         Tool::Eraser => {
             sep(ui, pal);
             lbl(ui, "draw-prop-radius-brush");
-            ui.add(
-                egui::DragValue::new(&mut o.eraser_radius).range(1.0..=500.0).speed(0.3).max_decimals(0).suffix(" px"),
-            )
-            .on_hover_text(t("draw-eraser-wheel"));
+            match size::spec(kind) {
+                Some(sp) => {
+                    let dot = ui.visuals().text_color();
+                    size_control(ui, &mut o.eraser_radius, &sp, Some(dot), &t("draw-eraser-wheel"));
+                }
+                None => {
+                    ui.add(
+                        egui::DragValue::new(&mut o.eraser_radius)
+                            .range(1.0..=500.0)
+                            .speed(0.3)
+                            .max_decimals(0)
+                            .suffix(" px"),
+                    )
+                    .on_hover_text(t("draw-eraser-wheel"));
+                }
+            }
             let mut transparent = o.eraser_background.is_none();
             if ui.toggle_value(&mut transparent, t("draw-prop-transparent")).changed() {
                 o.eraser_background = if transparent { None } else { Some(Color::WHITE) };
@@ -820,7 +885,7 @@ fn presets_menu(ui: &mut egui::Ui, kind: Tool, proto: &mut ToolStyle) {
 }
 
 /// Apply the fields that changed between `old` and `new` to one object.
-fn apply_diff(o: &mut Object, old: &ToolStyle, new: &ToolStyle) {
+pub(super) fn apply_diff(o: &mut Object, old: &ToolStyle, new: &ToolStyle) {
     let (a, b) = (&old.style, &new.style);
     let mut p = StylePatch::default();
     macro_rules! diff {

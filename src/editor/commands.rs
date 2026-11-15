@@ -100,6 +100,8 @@ pub enum Action {
     CycleTool(i32),
     /// Move the selected annotations (image pixels).
     Nudge(i32, i32),
+    /// Grow (+1) / shrink (-1) the size of the active tool or the selected annotations.
+    ToolSize(i32),
     DuplicateObjects,
     ToggleDrawPalette,
     Settings,
@@ -205,6 +207,8 @@ fn key_label(k: Key) -> &'static str {
         Key::Plus => "+",
         Key::Minus => "-",
         Key::Equals => "=",
+        Key::OpenBracket => "[",
+        Key::CloseBracket => "]",
         Key::PageUp => "PgUp",
         Key::PageDown => "PgDn",
         other => other.name(),

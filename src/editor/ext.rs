@@ -48,7 +48,8 @@ pub struct ToolInput {
     pub released: bool,
     pub double_clicked: bool,
     pub modifiers: egui::Modifiers,
-    /// Vertical wheel movement in points this frame (tools that [`CanvasTool::wants_wheel`]).
+    /// Vertical wheel movement in points this frame (tools that [`CanvasTool::wants_wheel`],
+    /// or Alt + wheel for tools that [`CanvasTool::wants_alt_wheel`]).
     pub scroll: f32,
     /// The pointer is over the canvas.
     pub hovered: bool,
@@ -79,6 +80,15 @@ pub trait CanvasTool: Send {
     fn deactivate(&mut self, _doc: &mut Document) {}
     /// The plain mouse wheel goes to the tool (e.g. brush size) instead of scrolling.
     fn wants_wheel(&self) -> bool {
+        false
+    }
+    /// Alt + wheel goes to the tool (size of any sized tool) instead of scrolling.
+    fn wants_alt_wheel(&self) -> bool {
+        false
+    }
+    /// `[` / `]`: shrink (`steps < 0`) or grow the tool's size. Returns true if the tool
+    /// has a size.
+    fn resize(&mut self, _doc: &mut Document, _steps: i32) -> bool {
         false
     }
     /// Listed in the ribbon's tool group (draw tools have their own palette instead).

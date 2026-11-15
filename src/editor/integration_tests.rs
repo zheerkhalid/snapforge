@@ -313,3 +313,99 @@ fn make_demo_files() {
     add(Tool::Magnifier, Pt::new(300.0, 470.0), Pt::new(360.0, 520.0), &|_| {});
     let _ = draw::save_sfcap(&dir.join("demo.sfcap"), &img, &objs, &draw::Meta::new("demo", "demo"));
 }
+
+#[test]
+fn size_keys_are_bound() {
+    let effects = full_registry();
+    let tools = annot::draw_tools();
+    let r = menus::build_registry(&effects, &tools, &[], &[]);
+    assert!(r.conflicts().is_empty(), "{:?}", r.conflicts());
+    let id = |k: Key, m: Modifiers| r.for_key(k, m).map(|c| c.id.clone());
+    assert_eq!(id(Key::OpenBracket, Modifiers::NONE).as_deref(), Some("draw.size_down"));
+    assert_eq!(id(Key::CloseBracket, Modifiers::NONE).as_deref(), Some("draw.size_up"));
+    // Exact modifiers only: Ctrl+[ is not the size key.
+    assert_eq!(id(Key::OpenBracket, Modifiers::COMMAND), None);
+    let label = |cmd: &str| r.get(cmd).and_then(|c| c.shortcut.iter().next().map(|s| s.label()));
+    assert_eq!(label("draw.size_down").as_deref(), Some("["));
+    assert_eq!(label("draw.size_up").as_deref(), Some("]"));
+}
+
+#[test]
+fn resize_steps_change_the_tool_when_nothing_is_selected() {
+    let mut d = doc();
+    let mut s = annot::DrawState::default();
+    s.style_for(Tool::Pencil).style.width = 4.0;
+    assert!(s.resize_by(Tool::Pencil, &mut d, 1));
+    assert_eq!(s.style_for(Tool::Pencil).style.width, 5.0);
+    assert!(s.resize_by(Tool::Pencil, &mut d, -3));
+    assert_eq!(s.style_for(Tool::Pencil).style.width, 2.0);
+    // The eraser's size is its radius, text tools use the font size, blur its strength.
+    s.style_for(Tool::Eraser).options.eraser_radius = 20.0;
+    assert!(s.resize_by(Tool::Eraser, &mut d, 1));
+    assert_eq!(s.style_for(Tool::Eraser).options.eraser_radius, 23.0);
+    s.style_for(Tool::Text).style.font.size = 18.0;
+    assert!(s.resize_by(Tool::Text, &mut d, 1));
+    assert_eq!(s.style_for(Tool::Text).style.font.size, 21.0);
+    s.style_for(Tool::Blur).options.blur_strength = 80.0;
+    assert!(s.resize_by(Tool::Blur, &mut d, 1));
+    assert_eq!(s.style_for(Tool::Blur).options.blur_strength, 80.0, "stops at the limit");
+    // Tools without a size ignore the keys; nothing was recorded for undo.
+    assert!(!s.resize_by(Tool::Select, &mut d, 1));
+    assert!(!s.resize_by(Tool::Fill, &mut d, 1));
+    assert!(!s.resize_by(Tool::Pencil, &mut d, 0));
+    assert!(s.prop_before.is_none());
+    assert!(!d.history.can_undo());
+    assert!(!d.has_annotations());
+}
+
+#[test]
+fn resize_steps_on_selected_objects_are_one_undo_step() {
+    let mut d = doc();
+    assert!(layer::edit(&mut d, "Add", |o| {
+        o.push(rect_object(1, 2.0));
+        o.push(rect_object(2, 12.0));
+        true
+    }));
+    let width = |d: &Document, i: usize| layer::layer(d).expect("layer").objects()[i].style.width;
+    let w0 = width(&d, 0);
+    let steps = d.history.undo_len();
+    let mut s = annot::DrawState::default();
+    assert!(s.select_all(&d));
+    // A burst of three steps with the Select tool: both rectangles follow, and so do
+    // new rectangles.
+    for _ in 0..3 {
+        assert!(s.resize_by(Tool::Select, &mut d, 1));
+    }
+    let w1 = width(&d, 0);
+    assert_eq!(w1, w0 + 3.0);
+    assert_eq!(width(&d, 1), w1);
+    assert_eq!(s.style_for(Tool::Rect).style.width, w1);
+    assert_eq!(d.history.undo_len(), steps, "the burst is still open");
+    assert!(s.prop_before.is_some());
+    // Ending the burst (pause, another action, a click) records exactly one step.
+    s.end_gesture(&mut d);
+    assert!(s.prop_before.is_none());
+    assert_eq!(d.history.undo_len(), steps + 1);
+    assert!(d.undo());
+    assert_eq!((width(&d, 0), width(&d, 1)), (w0, w0));
+    assert!(d.redo());
+    assert_eq!(width(&d, 0), w1);
+    // Without a burst open, ending one does nothing.
+    s.end_gesture(&mut d);
+    assert_eq!(d.history.undo_len(), steps + 1);
+}
+
+#[test]
+fn clone_stamp_and_draw_tools_answer_the_size_gestures() {
+    use super::ext::CanvasTool;
+    let mut d = doc();
+    let mut tool = fx_session::CloneTool::new();
+    assert!(tool.resize(&mut d, 1));
+    assert!(tool.resize(&mut d, -1));
+    assert!(tool.wants_wheel());
+    let tools = annot::draw_tools();
+    let pencil = tools.iter().find(|t| t.id() == "draw.pencil").expect("pencil");
+    assert!(pencil.wants_alt_wheel() && !pencil.wants_wheel());
+    let eraser = tools.iter().find(|t| t.id() == "draw.eraser").expect("eraser");
+    assert!(eraser.wants_wheel(), "the plain wheel still resizes the eraser");
+}

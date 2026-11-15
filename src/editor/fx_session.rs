@@ -11,6 +11,7 @@
 //! tool and previews on a downscaled proxy computed by a worker thread. Apply returns a
 //! closure the app runs on its effect worker (one undo step).
 
+use super::annot::size;
 use super::document::{DocId, Document};
 use super::effects::{downscale_proxy, EffectCtx, EffectDef, EffectRegistry, MenuSlot, ParamValues};
 use super::ext::{CanvasTool, ToolInput};
@@ -790,11 +791,31 @@ pub struct CloneTool {
     radius: u32,
     hardness: f32,
     painting: bool,
+    /// The size label after a wheel / key resize.
+    flash: Option<size::Flash>,
 }
+
+/// Brush radius limits of the clone stamp.
+const CLONE_SIZE: size::SizeSpec =
+    size::SizeSpec { field: size::SizeField::EraserRadius, min: 1.0, max: 400.0, tip: size::Tip::Brush };
 
 impl CloneTool {
     pub fn new() -> Self {
-        Self { src: None, offset: None, last: None, hover: None, radius: 16, hardness: 0.6, painting: false }
+        Self {
+            src: None,
+            offset: None,
+            last: None,
+            hover: None,
+            radius: 16,
+            hardness: 0.6,
+            painting: false,
+            flash: None,
+        }
+    }
+
+    fn resize_by(&mut self, steps: i32) {
+        self.radius = CLONE_SIZE.step(self.radius as f32, steps) as u32;
+        self.flash = Some(size::Flash::new(CLONE_SIZE.label(self.radius as f32)));
     }
 
     fn stamp(&self, doc: &mut Document, at: [f64; 2]) {
@@ -823,12 +844,15 @@ impl CanvasTool for CloneTool {
     fn wants_wheel(&self) -> bool {
         true
     }
+    fn resize(&mut self, _doc: &mut Document, steps: i32) -> bool {
+        self.resize_by(steps);
+        true
+    }
 
     fn on_input(&mut self, doc: &mut Document, input: &ToolInput) {
         self.hover = input.pos.filter(|_| input.hovered);
         if input.scroll != 0.0 {
-            let r = self.radius as f32 * if input.scroll > 0.0 { 1.15 } else { 1.0 / 1.15 };
-            self.radius = (r.round() as u32).clamp(1, 400);
+            self.resize_by(if input.scroll > 0.0 { 1 } else { -1 });
         }
         let Some(p) = input.pos else { return };
         if input.pressed && input.modifiers.alt {
@@ -872,10 +896,27 @@ impl CanvasTool for CloneTool {
             pos2(s[0], s[1])
         };
         let rr = (self.radius as f32 * map.scale).max(2.0);
-        if let Some(h) = self.hover {
+        let ctx = painter.ctx().clone();
+        let clip = painter.clip_rect();
+        let label = self.flash.as_ref().and_then(|f| f.text(&ctx)).map(str::to_owned);
+        if label.is_none() {
+            self.flash = None;
+        }
+        // `hover` is only refreshed while the pointer is over the canvas.
+        let over = ctx.input(|i| i.pointer.hover_pos()).is_some_and(|p| clip.contains(p));
+        let hover = self.hover.filter(|_| over);
+        if let Some(text) = label {
+            // Resized with the keys away from the canvas: preview in its middle.
+            let c = hover.map(to).unwrap_or_else(|| {
+                size::paint_ring(painter, clip.center(), rr);
+                clip.center()
+            });
+            size::paint_label(painter, c, rr, &text);
+        }
+        if let Some(h) = hover {
             let c = to(h);
-            painter.circle_stroke(c, rr, Stroke::new(2.5_f32, Color32::from_black_alpha(140)));
-            painter.circle_stroke(c, rr, Stroke::new(1.0_f32, Color32::WHITE));
+            size::paint_ring(painter, c, rr);
+            size::paint_center(painter, c);
             let src = match (self.offset, self.src) {
                 (Some((dx, dy)), _) => Some([h[0] + dx as f64, h[1] + dy as f64]),
                 (None, Some(s)) => Some([s.x as f64 + 0.5, s.y as f64 + 0.5]),
@@ -905,7 +946,8 @@ impl CanvasTool for CloneTool {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.label(t("fx-clone-radius"));
-                ui.add(egui::Slider::new(&mut self.radius, 1..=200).suffix(" px"));
+                ui.add(egui::Slider::new(&mut self.radius, 1..=400).logarithmic(true).suffix(" px"))
+                    .on_hover_text(t("draw-eraser-wheel"));
                 ui.label(t("fx-clone-hardness"));
                 ui.add(egui::Slider::new(&mut self.hardness, 0.0..=1.0).fixed_decimals(2));
             });
