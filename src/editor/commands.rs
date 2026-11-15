@@ -77,6 +77,9 @@ pub enum Action {
     CombineImages,
     ImagesToPdf,
     BatchPrint,
+    VideoEditor,
+    ConvertToMp4,
+    ScheduleRecording,
     Palette,
     // view
     Zoom(ZoomCmd),

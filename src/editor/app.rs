@@ -1000,6 +1000,12 @@ impl EditorApp {
             Action::CombineImages => super::tools_host().combine_images(self.tools_context()),
             Action::ImagesToPdf => super::tools_host().images_to_pdf(self.tools_context()),
             Action::BatchPrint => super::tools_host().batch_print(self.tools_context()),
+            Action::VideoEditor => {
+                self.video.open(None);
+                self.video_icon_done = false;
+            }
+            Action::ConvertToMp4 => self.media.open(super::media_tools::MediaKind::Convert),
+            Action::ScheduleRecording => self.media.open(super::media_tools::MediaKind::Schedule),
             Action::SaveProject => {
                 if let Some(id) = active {
                     self.save_project(id, true);

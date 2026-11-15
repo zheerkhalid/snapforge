@@ -204,7 +204,10 @@ fn section(ui: &mut egui::Ui, title: &str) {
 fn buttons(ui: &mut egui::Ui, primary: &str, primary_enabled: bool, secondary: &str) -> (bool, bool) {
     let (mut a, mut b) = (false, false);
     ui.add_space(10.0);
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+    // A fixed-height row: inside the scroll area a bare right-to-left layout would centre the
+    // buttons in the unbounded remaining height.
+    let row = vec2(ui.available_width(), 30.0);
+    ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
         a = ui.add_enabled(primary_enabled, style::primary_button(primary).min_size(vec2(110.0, 28.0))).clicked();
         b = ui.add(egui::Button::new(secondary).min_size(vec2(90.0, 28.0))).clicked();
     });
@@ -378,7 +381,7 @@ impl ConvertDlg {
         section(ui, &t("convert-files"));
         egui::Grid::new("convert-files").num_columns(3).spacing(vec2(8.0, 6.0)).show(ui, |ui| {
             ui.label(t("convert-input"));
-            let r = ui.add(egui::TextEdit::singleline(&mut self.input).desired_width(330.0));
+            let r = ui.add_sized(vec2(330.0, 22.0), egui::TextEdit::singleline(&mut self.input));
             if r.lost_focus() && self.input.trim() != self.probed_input {
                 self.input_changed();
             }
@@ -387,7 +390,7 @@ impl ConvertDlg {
             }
             ui.end_row();
             ui.label(t("convert-output"));
-            if ui.add(egui::TextEdit::singleline(&mut self.output).desired_width(330.0)).changed() {
+            if ui.add_sized(vec2(330.0, 22.0), egui::TextEdit::singleline(&mut self.output)).changed() {
                 self.output_custom = true;
             }
             if ui.button(t("media-browse")).clicked() {
@@ -990,8 +993,8 @@ fn split_key(k: (u16, u8, u8, u8, u8)) -> (String, String) {
 }
 
 fn date_time(ui: &mut egui::Ui, date: &mut String, time: &mut String) {
-    ui.add(egui::TextEdit::singleline(date).hint_text("YYYY-MM-DD").desired_width(110.0));
-    ui.add(egui::TextEdit::singleline(time).hint_text("HH:MM").desired_width(60.0));
+    ui.add_sized(vec2(110.0, 22.0), egui::TextEdit::singleline(date).hint_text("YYYY-MM-DD"));
+    ui.add_sized(vec2(60.0, 22.0), egui::TextEdit::singleline(time).hint_text("HH:MM"));
 }
 
 fn format_minutes(m: u32) -> String {
