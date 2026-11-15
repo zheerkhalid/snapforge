@@ -141,6 +141,10 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         }
         apply_auto_capture_timer();
     }
+    if !standalone_capture {
+        crate::recorder::recover_pending();
+        crate::recorder::schedule::start_watcher();
+    }
     if cli.bench_child {
         crate::bench::start_child();
     }
@@ -148,6 +152,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
 
     message_loop();
 
+    if crate::recorder::is_recording() {
+        if let Err(e) = crate::recorder::stop_blocking() {
+            log::error!("recording could not be finalized on exit: {e:#}");
+        }
+    }
     crate::tools::close_all();
     crate::pin::close_all();
     hotkeys::stop();

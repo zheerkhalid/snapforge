@@ -21,6 +21,9 @@ pub fn execute(cmd: AppCommand) {
             }
         }
         AppCommand::ScreenTool(t) => crate::tools::open(t),
+        AppCommand::Record(target) => crate::recorder::select_and_start(target),
+        AppCommand::StopRecording => crate::recorder::stop(),
+        AppCommand::TogglePauseRecording => crate::recorder::toggle_pause(),
         _ => log::info!("command not available yet"),
     }
 }
