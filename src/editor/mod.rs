@@ -51,9 +51,11 @@ mod palette;
 mod param_dialog;
 mod scan;
 mod scan_post;
+mod screen_pick;
 mod selection;
 mod style;
 mod texture;
+mod tools_dialogs;
 mod view;
 mod window;
 

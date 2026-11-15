@@ -952,3 +952,23 @@ editor-effect-nochange = { $name } made no change.
 ## Editor effects (integration)
 fx-round-corners = Round Corners…
 fx-size-zero-tip = 0 keeps the current size
+## Editor tools dialogs (integration)
+tools-files-count = Images ({ $count })
+tools-add-files = Add files…
+tools-no-files = No images yet. Add files or open images in the editor.
+tools-remove = Remove
+tools-move-up = Move up
+tools-move-down = Move down
+tools-preview = Preview
+tools-working = Working…
+tools-nothing = There is nothing to combine.
+tools-combine-run = Combine
+tools-label-size = Label size
+tools-label-color = Label color
+tools-pdf-run = Create PDF
+tools-pdf-output = Save as
+tools-pdf-progress = Reading image { $n } of { $total }…
+tools-pdf-writing = Writing the PDF…
+tools-print-run = Print…
+tools-template-preview = Preview: { $text }
+tools-failed = Failed: { $error }
