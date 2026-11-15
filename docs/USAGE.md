@@ -115,3 +115,50 @@ The editor's left palette holds every drawing tool. Annotations stay editable ob
 - Save, Copy, Print, Pin and *Continue to …* use the flattened picture; the original pixels are kept separately while you edit.
 
 Image ▸ Resize to 25 / 50 / 75 / 200 % is on `Ctrl+1` … `Ctrl+4`. Effects apply to the selection when there is one. Make Color Transparent, Spotlight, Remove / Insert Strip and Watermark work directly on the canvas; the Clone Stamp tool takes its source from an Alt+click.
+
+## Screen recorder
+
+Start a recording from the tray or toolbar menu (**Screen Recorder**), or with the optional hotkeys:
+
+- Recording targets are full screen, a window, a region or a fixed-size region. Region and window recordings show the selection overlay first.
+- The floating **control bar** shows the elapsed time and the audio level, with Pause and Stop. It never appears in the recording.
+- **F5** toggles a smooth 2× zoom around the cursor while recording.
+- Audio can come from the microphone, system sound (loopback) or both mixed. A webcam picture-in-picture, click highlights and click sounds are options in **Settings → Recorder**.
+- Recordings are written crash-safe. After a power loss, SnapForge recovers the unfinished file at the next start.
+- **Schedule Recording…** starts and stops a recording at set times and can put the PC to sleep afterwards.
+- **Convert to MP4…** resizes and recompresses a video, or extracts its audio to MP3 or M4A.
+
+## Video editor
+
+Open it with **Video Editor…** or `SnapForge.exe --open video.mp4`.
+
+| Key | Action |
+|---|---|
+| `Space` | Play / pause |
+| `←` / `→` | Previous / next frame (`Shift`: 1 second) |
+| `I` / `O` | Mark in / out |
+| `Del` | Cut the marked range |
+| `Ctrl+wheel` | Zoom the timeline |
+
+- Drag the ends of the video track to trim.
+- Add annotations from the left palette. Each shows as a bar on the annotation track; drag or resize the bar to change when the annotation is visible.
+- Add zoom & pan keyframes and title cards.
+- Export as MP4 or as an animated GIF. Projects are saved as `.sfvid`.
+
+## Pin to Screen and Capture Text
+
+- **Pin Region to Screen** keeps a capture floating above all windows.
+  - Drag to move it, use the wheel to zoom, and `Ctrl+wheel` to change opacity.
+  - `D` toggles draw mode (pen, text, steps), and `Ctrl+drag` on a border grows or crops the canvas.
+  - Space and Enter actions are configurable. `Esc` or a double-click closes the pin.
+- **Capture Text (OCR)**: select a region and the recognized text appears in an editable window. Choose the language from the recognizers installed in Windows, then copy all or part of the text.
+
+## Screen tools
+
+| Tool | Keys |
+|---|---|
+| Color picker | Click picks and copies the color. `Space` freezes, `+`/`−` zoom, arrow keys move 1 px. The fine-tune panel shows RGB/HSV values and recent colors. |
+| Magnifier | Wheel zooms, arrow keys pan, `S` smooth, `N` negative, `M` lens/pane |
+| Crosshair | Full-screen lines with a loupe. `Esc` or right-click closes it. |
+| Focus | Dims everything but the cursor area. Wheel sets the size; `Ctrl+Shift+drag` pins an area. |
+| Ruler | Drag to measure. `R` rotates, `U` changes units, `P` switches to the protractor, `C` calibrates (enter the screen diagonal), `Ctrl+C` copies the measurement. |

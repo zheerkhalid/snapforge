@@ -47,22 +47,44 @@ Later phases add `pdf-writer`, `zip`, `gif`/`gifski` and `mp3lame-encoder`. Each
 
 ## Milestones
 
-### Phase 1: core capture
-- [x] Project skeleton, release profile, static CRT, manifest (PerMonitorV2, long paths), version resource, icon
-- [ ] Settings (TOML, portable mode, DPAPI-protected passwords), rotating log
-- [ ] File-name templating with tests
-- [ ] Capture backends: WGC (monitor and window, borderless, HDR → SDR), DXGI duplication, GDI; window enumeration
-- [ ] Capture worker thread
-- [ ] Overlays: rectangle (loupe, readout, Tab corner, Ctrl+Z, nudges), freehand, window/object (hover, Ctrl multi-select, wheel to change level), fixed-size (presets, Shift+arrows)
-- [ ] Full screen (active or all monitors), active window
-- [ ] Scrolling capture (auto-scroll, overlap detection, sticky header/footer, custom area, horizontal) with stitch tests
-- [ ] Delay countdown, repeat last capture, auto capture at an interval
-- [ ] Hotkeys (reassignable, conflict detection, PrtSc override via a low-level hook)
-- [ ] Tray icon and menu; floating toolbar (drag, auto-hide, big buttons, lock, custom icons, context menu)
-- [ ] Outputs: editor, clipboard (DIB + PNG), file, printer, email (MAPI), Word/Excel/PowerPoint (COM), OneNote, FTP/SFTP, external program, auto-copy, timestamp, preview-first
-- [ ] Minimal editor (tabs, zoom, save, copy) as the Phase 2 foundation
-- [ ] CLI automation and single-instance forwarding
-- [ ] `--bench`
+Each phase was built by parallel agents, each in its own git worktree, against shared contracts (`app.rs` command bus, `settings/`, module stubs), then merged and integrated. Every merge passed `cargo build`, `cargo test`, `cargo clippy --all-targets -D warnings` and `cargo fmt`.
 
-### Phase 2: editor · Phase 3: draw · Phase 4: recorder · Phase 5: pin/OCR/tools · Phase 6: settings/packaging
-These follow the feature spec. A checklist will be added at the start of each phase.
+### Phase 1: core capture ✅
+- [x] Skeleton, release profile, static CRT, manifest (PerMonitorV2, long paths), version resource, generated icon
+- [x] Settings (TOML, portable mode, DPAPI passwords), rotating log, Fluent strings
+- [x] File-name templates (`$Y $M $D $H $N $S`, `###`, `@`, `%VARS%`), daily counter reset
+- [x] Capture backends: WGC (borderless, HDR→SDR), DXGI duplication, GDI; z-order snapshot; UI Automation element chain
+- [x] Overlays: region (loupe, Tab corner, nudges, Ctrl+Z), freehand, window/object (multi-select, levels), fixed size, scroll pick
+- [x] Scrolling capture (adaptive wheel, sticky header/footer, horizontal, both directions)
+- [x] Delay countdown, repeat last, auto capture
+- [x] Hotkeys (PrtSc override hook on its own thread), tray, floating toolbar (auto-hide, big buttons, lock, custom buttons)
+- [x] Outputs: editor, draw, clipboard, file, printer, email, Word/Excel/PowerPoint/OneNote, FTP/SFTP, program, stamp
+- [x] CLI automation, single-instance forwarding, `--bench`
+
+### Phase 2: editor ✅
+- [x] Tabs and workspaces, memory-aware unlimited undo, menus, ribbon, command palette (Ctrl+K)
+- [x] Selections (rect/freehand, move/copy, stats, edge trim/extend), crop, resize, canvas, rotate, flip
+- [x] All image operations and effects with live preview; clone, strips, transparency
+- [x] File commands (Save All, sequence save, delete to Recycle Bin, properties, recent multi-open), Edit With, WIA scanner with deskew
+- [x] Tools: combine images, images to PDF, batch print
+
+### Phase 3: draw ✅
+- [x] 25 tools: text (curved/path/callout), lines (arrowheads, decor, dashes), shapes, highlighters, magnifier, steps, emoji, 3D arrows, pointers, blur/pixelate/eraser/fill/pencil
+- [x] Multi-select, handles, align, z-order, presets, font preview, screen color pick, F-keys and Tab cycling
+- [x] `.sfcap` projects with auto-save; golden-image tests
+
+### Phase 4: recorder and video editor ✅
+- [x] WGC capture, GPU NV12, hardware H.264/AAC MP4, WMV, MP3; mic + loopback mixing; webcam PiP
+- [x] Control bar (excluded from capture), click highlights and sounds, F5 zoom, follow mouse, pause
+- [x] Scheduled recording, crash recovery (fragmented MP4 + journal), Convert to MP4, audio extraction
+- [x] Video editor: timeline, trim/cut, frame stepping, timed annotations, zoom/pan, title cards, GIF export, `.sfvid`
+
+### Phase 5: pin, OCR and screen tools ✅
+- [x] Pin to screen (zoom, opacity, draw mode, canvas expand, Space/Enter behaviours, send to editor)
+- [x] OCR with Windows.Media.Ocr (language choice, tiling above 10 000 px)
+- [x] Color picker, magnifier, crosshair, focus, calibrated ruler with protractor
+
+### Phase 6: settings, polish and packaging ✅
+- [x] Settings window (all tabs, hotkey conflict detection, import/export, per-tab reset, remembered placement)
+- [x] Fluent localization, keyboard navigation and accessibility labels (AccessKit)
+- [x] Inno Setup per-user installer, portable ZIP, `--uninstall-cleanup`, CI
