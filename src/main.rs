@@ -18,6 +18,7 @@ mod integration;
 mod logging;
 mod output;
 mod overlay;
+mod recorder;
 mod settings;
 mod toolbar;
 mod tray;

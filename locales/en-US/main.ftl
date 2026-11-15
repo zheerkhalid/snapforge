@@ -97,3 +97,21 @@ notify-uploaded-no-url = Uploaded to { $host }
 ## Overlay (adjust mode) and countdown
 hint-adjust = Drag inside to move · Drag handles to resize · Arrows move 1 px · Shift+arrows resize · Enter or double-click captures · Right-click reselects
 countdown-cancel = Esc to cancel
+## Recorder
+rec-format-mp4 = MP4 (H.264 + AAC)
+rec-format-wmv = WMV (WMV9 + WMA)
+rec-format-mp3 = MP3 (audio only)
+rec-pause = Pause
+rec-resume = Resume
+rec-stop = Stop Recording
+rec-zoom = Zoom In/Out (F5)
+rec-large-bar = Large Control Bar
+rec-saved = Recording saved to { $path }
+rec-recovered = Recovered an interrupted recording: { $path }
+rec-error-start = Could not start recording: { $error }
+rec-error-finish = Could not finish the recording: { $error }
+rec-error-select = Could not take the screenshot for the selection
+rec-error-no-audio = Audio-only recording needs system audio or the microphone turned on
+rec-schedule-invalid = Enter start and end times as YYYY-MM-DD HH:MM
+rec-schedule-order = The end time must be after the start time
+rec-schedule-past = The end time is already in the past
