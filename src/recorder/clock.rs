@@ -39,10 +39,6 @@ impl MediaClock {
         Self { start: start_hns, pauses: Vec::new() }
     }
 
-    pub fn start(&self) -> i64 {
-        self.start
-    }
-
     pub fn is_paused(&self) -> bool {
         matches!(self.pauses.last(), Some((_, None)))
     }
@@ -100,7 +96,8 @@ impl MediaClock {
         (t.max(self.start) - self.start - self.paused_before(t)).max(0)
     }
 
-    /// Total time spent paused so far (for the control bar).
+    /// Total time spent paused so far.
+    #[cfg(test)]
     pub fn total_paused(&self, now: i64) -> i64 {
         self.paused_before(now)
     }

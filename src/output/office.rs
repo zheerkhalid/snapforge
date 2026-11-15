@@ -86,6 +86,7 @@ pub enum Arg<'a> {
     I32(i32),
     Bool(bool),
     F64(f64),
+    #[cfg(test)]
     Disp(&'a IDispatch),
 }
 
@@ -96,12 +97,14 @@ impl Arg<'_> {
             Arg::I32(v) => VARIANT::from(*v),
             Arg::Bool(v) => VARIANT::from(*v),
             Arg::F64(v) => VARIANT::from(*v),
+            #[cfg(test)]
             Arg::Disp(d) => dispatch_variant(d),
         }
     }
 }
 
 /// VT_DISPATCH variant holding a new reference to `d`.
+#[cfg(test)]
 fn dispatch_variant(d: &IDispatch) -> VARIANT {
     use windows::core::imp;
     let raw = imp::VARIANT {
@@ -397,6 +400,9 @@ fn send_onenote(path: &Path) -> Result<()> {
 pub fn send_to(app: OfficeApp, path: &Path) -> Result<()> {
     if !path.is_file() {
         bail!("cannot send {} to {}: the file does not exist", path.display(), app.name());
+    }
+    if !is_installed(app) {
+        bail!("{} is not installed", app.name());
     }
     if app == OfficeApp::OneNote {
         return send_onenote(path);

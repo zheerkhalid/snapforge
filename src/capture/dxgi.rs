@@ -54,11 +54,6 @@ impl DxgiCache {
         self.devices.clear();
     }
 
-    /// Whether a device for the default adapter exists (WGC can share it).
-    pub fn device_for_adapter(&self, index: u32) -> Option<(ID3D11Device, ID3D11DeviceContext)> {
-        self.devices.iter().find(|d| d.adapter_index == index).map(|d| (d.device.clone(), d.ctx.clone()))
-    }
-
     fn device_index(&mut self, adapter_index: u32) -> Result<usize, CaptureError> {
         if let Some(i) = self.devices.iter().position(|d| d.adapter_index == adapter_index) {
             return Ok(i);

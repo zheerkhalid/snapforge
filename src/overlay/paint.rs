@@ -78,6 +78,7 @@ impl Dib {
         unsafe { std::slice::from_raw_parts_mut(self.bits, self.len()) }
     }
 
+    #[cfg(test)]
     pub fn to_image(&self) -> Image {
         Image::from_bgra(self.w as u32, self.h as u32, self.data().to_vec())
     }
@@ -305,17 +306,13 @@ impl Canvas {
     }
 
     /// Render the whole scene into a new image (visual checks, tests).
+    #[cfg(test)]
     pub fn render_image(&mut self, scene: &Scene) -> Option<Image> {
         let dib = Dib::new(self.origin.w, self.origin.h)?;
         self.draw(dib.dc, Point::new(self.origin.x, self.origin.y), self.origin, scene);
         let mut img = dib.to_image();
         img.set_opaque();
         Some(img)
-    }
-
-    /// Bytes held by the cached bitmaps.
-    pub fn memory_bytes(&self) -> usize {
-        self.bright.len() + self.dim.len() + self.back.as_ref().map_or(0, |b| b.len())
     }
 }
 

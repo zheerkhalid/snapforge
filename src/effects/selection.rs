@@ -1,9 +1,15 @@
 //! Selection helpers: rectangle, ellipse and polygon masks, statistics, move/copy, masked apply.
 
-use super::{lerp_px, par_rows, Color, Mask};
-use crate::common::{Image, Point, Rect};
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use super::{lerp_px, par_rows, Mask};
+use crate::common::{Image, Rect};
+// Used by the helpers that only the tests exercise (statistics, move/copy, polygon masks).
+#[cfg(test)]
+use {
+    super::Color,
+    crate::common::Point,
+    serde::{Deserialize, Serialize},
+    std::collections::HashSet,
+};
 
 /// Hard-edged rectangle mask (clipped to the image).
 pub fn rect_mask(width: u32, height: u32, rect: Rect) -> Mask {
@@ -51,12 +57,14 @@ pub fn ellipse_mask(width: u32, height: u32, rect: Rect) -> Mask {
 
 /// Anti-aliased polygon (freehand lasso), even-odd rule. Points are pixel coordinates;
 /// each point is taken as the centre of its pixel.
+#[cfg(test)]
 pub fn polygon_mask(width: u32, height: u32, points: &[Point]) -> Mask {
     let pts: Vec<(f32, f32)> = points.iter().map(|p| (p.x as f32 + 0.5, p.y as f32 + 0.5)).collect();
     polygon_mask_f(width, height, &pts)
 }
 
 /// [`polygon_mask`] with sub-pixel coordinates (pixel corners at integers).
+#[cfg(test)]
 pub fn polygon_mask_f(width: u32, height: u32, pts: &[(f32, f32)]) -> Mask {
     const SS: usize = 4;
     let mut m = Mask::new(width, height);
@@ -98,6 +106,7 @@ pub fn polygon_mask_f(width: u32, height: u32, pts: &[(f32, f32)]) -> Mask {
     m
 }
 
+#[cfg(test)]
 fn add_span(acc: &mut [f32], a: f32, b: f32, wt: f32) {
     let w = acc.len() as f32;
     let (a, b) = (a.clamp(0.0, w), b.clamp(0.0, w));
@@ -125,6 +134,7 @@ pub fn feather_mask(mask: &Mask, radius: f32) -> Mask {
 }
 
 /// Bounding box of the selected (non-zero) pixels; empty if nothing is selected.
+#[cfg(test)]
 pub fn mask_bounds(mask: &Mask) -> Rect {
     let w = mask.width as usize;
     let (mut x0, mut y0, mut x1, mut y1) = (usize::MAX, usize::MAX, 0, 0);
@@ -143,6 +153,7 @@ pub fn mask_bounds(mask: &Mask) -> Rect {
     Rect::from_ltrb(x0 as i32, y0 as i32, x1 as i32, y1 as i32)
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SelectionStats {
     /// Pixels at least half selected.
@@ -151,6 +162,7 @@ pub struct SelectionStats {
     pub bounds: Rect,
 }
 
+#[cfg(test)]
 pub fn selection_stats(img: &Image, mask: &Mask) -> SelectionStats {
     let mut count = 0u64;
     let mut colors: HashSet<u32> = HashSet::new();
@@ -165,6 +177,7 @@ pub fn selection_stats(img: &Image, mask: &Mask) -> SelectionStats {
 
 /// The selected pixels (multiplied by the mask), cropped to the selection's bounds,
 /// and where they came from.
+#[cfg(test)]
 pub fn extract_selection(img: &Image, mask: &Mask) -> (Image, Rect) {
     let b = mask_bounds(mask);
     let mut piece = img.crop(b);
@@ -178,14 +191,8 @@ pub fn extract_selection(img: &Image, mask: &Mask) -> (Image, Rect) {
     (piece, b)
 }
 
-/// Composite `piece` over a copy of `img` at (x, y).
-pub fn paste(img: &Image, piece: &Image, x: i32, y: i32) -> Image {
-    let mut out = img.clone();
-    out.draw_over(piece, x, y);
-    out
-}
-
 /// Move or copy a selection.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MoveParams {
@@ -197,6 +204,7 @@ pub struct MoveParams {
     pub fill: Color,
 }
 
+#[cfg(test)]
 pub fn move_selection(img: &Image, mask: &Mask, p: &MoveParams) -> Image {
     let (piece, b) = extract_selection(img, mask);
     let mut out = img.clone();

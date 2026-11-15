@@ -36,7 +36,6 @@ pub enum Action {
     // file
     Open,
     Save,
-    SaveDoc(DocId),
     SaveAs,
     SaveAll,
     SaveAllSequence,
@@ -55,7 +54,6 @@ pub enum Action {
     Scan,
     Print,
     Continue,
-    Hide,
     // edit
     Undo,
     Redo,
@@ -143,20 +141,6 @@ impl Shortcut {
             }
         }
         Some(sc)
-    }
-
-    pub fn modifiers(&self) -> Modifiers {
-        let mut m = Modifiers::NONE;
-        if self.ctrl {
-            m |= Modifiers::COMMAND;
-        }
-        if self.shift {
-            m |= Modifiers::SHIFT;
-        }
-        if self.alt {
-            m |= Modifiers::ALT;
-        }
-        m
     }
 
     /// Exact match against an event's modifiers (no extra modifiers allowed).
@@ -306,9 +290,6 @@ pub fn multiple_docs(s: &CmdState) -> bool {
 pub fn can_continue(s: &CmdState) -> bool {
     s.can_continue
 }
-pub fn workspaces_on(s: &CmdState) -> bool {
-    s.workspaces
-}
 pub fn has_objects(s: &CmdState) -> bool {
     s.has_doc && s.has_objects && !s.busy
 }
@@ -412,12 +393,9 @@ impl CommandRegistry {
         self.cmds.iter()
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.cmds.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.cmds.is_empty()
     }
 
     /// The command bound to this key press (exact modifiers), if any.
@@ -577,7 +555,7 @@ mod tests {
                 .key("Z"),
         );
         r.register(Command::new("edit.paste", "Paste", Category::Edit, Action::Paste).key("Ctrl+V"));
-        r.register(Command::new("internal", "Hidden thing", Category::Edit, Action::Hide).hidden());
+        r.register(Command::new("internal", "Hidden thing", Category::Edit, Action::Continue).hidden());
         r
     }
 

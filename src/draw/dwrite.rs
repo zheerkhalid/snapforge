@@ -50,7 +50,8 @@ pub struct TextLayout {
     pub height: f32,
     /// Ink width of the longest line.
     pub content_width: f32,
-    pub line_height: f32,
+    /// Number of laid-out lines (checked by the tests).
+    #[cfg(test)]
     pub line_count: u32,
 }
 
@@ -216,15 +217,14 @@ fn build(engine: &Engine, spec: &TextSpec) -> windows::core::Result<TextLayout> 
             Collector { out: collector.clone(), factory2: engine.factory2.clone() }.into();
         layout.Draw(None, &renderer, 0.0, 0.0)?;
         let c = std::mem::take(&mut *collector.borrow_mut());
-        let line_count = m.lineCount.max(1);
         Ok(TextLayout {
             glyphs: c.glyphs,
             decos: c.decos,
             width,
             height: m.height,
             content_width: m.width,
-            line_height: m.height / line_count as f32,
-            line_count,
+            #[cfg(test)]
+            line_count: m.lineCount.max(1),
         })
     }
 }

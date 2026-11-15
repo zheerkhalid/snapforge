@@ -187,6 +187,7 @@ pub fn colorize(mask: &Mask, bgr: [u8; 3], alpha: u8) -> Image {
 }
 
 /// `text` in solid `bgr` on an opaque `bg` background, with `margin` pixels around it.
+#[cfg(test)]
 pub fn text_image(text: &str, px: i32, bgr: [u8; 3], bg: [u8; 3], margin: u32) -> Option<Image> {
     let m = text_mask(text, px, false)?;
     let mut img = Image::filled(m.w + 2 * margin, m.h + 2 * margin, [bg[0], bg[1], bg[2], 255]);

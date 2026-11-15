@@ -74,7 +74,6 @@ pub(super) struct Toast {
 /// A file handed to an external editor and watched for changes.
 pub(super) struct ExternalEdit {
     pub doc: DocId,
-    pub path: PathBuf,
     pub editor: String,
     _watcher: FileWatcher,
 }
@@ -806,7 +805,6 @@ impl EditorApp {
                     self.save(id, false, false);
                 }
             }
-            Action::SaveDoc(id) => self.save(id, false, false),
             Action::SaveAs => {
                 if let Some(id) = active {
                     self.save(id, true, false);
@@ -895,7 +893,6 @@ impl EditorApp {
                     }
                 }
             }
-            Action::Hide => self.hide(ctx),
             Action::Undo => self.step_history(1),
             Action::Redo => self.step_history(-1),
             Action::UndoMany(n) => self.step_history(n as isize),
@@ -1143,7 +1140,6 @@ impl EditorApp {
         ToolsContext {
             files: docs.iter().filter(|d| !d.dirty).filter_map(|d| d.path.clone()).collect(),
             images: docs.iter().map(|d| (d.title.clone(), d.composited())).collect(),
-            owner_hwnd: self.hwnd,
         }
     }
 
@@ -1432,9 +1428,8 @@ impl EditorApp {
         self.external.retain(|e| e.doc != doc);
         let jobs = self.jobs.clone();
         let p = path.clone();
-        let watcher =
-            FileWatcher::start(path.clone(), move || jobs.send(JobResult::ExternalChanged { doc, path: p.clone() }));
-        self.external.push(ExternalEdit { doc, path, editor: ed.name.clone(), _watcher: watcher });
+        let watcher = FileWatcher::start(path, move || jobs.send(JobResult::ExternalChanged { doc, path: p.clone() }));
+        self.external.push(ExternalEdit { doc, editor: ed.name.clone(), _watcher: watcher });
         self.toast(tf("editor-edit-with-started", &[("name", &ed.name)]), false);
     }
 

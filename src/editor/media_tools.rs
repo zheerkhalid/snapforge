@@ -11,8 +11,8 @@ use crate::app::{self, AppCommand};
 use crate::common::time::DateTime;
 use crate::common::win;
 use crate::i18n::{t, tf};
-use crate::recorder::convert::{AudioFormat, ConvertOptions, Resize};
 use crate::recorder::schedule;
+use crate::recorder::{AudioFormat, ConvertOptions, Resize};
 use crate::settings::recorder::{ScheduleSettings, ScheduleTarget, VideoQuality};
 use eframe::egui::{self, vec2, RichText, ViewportBuilder, ViewportClass, ViewportCommand, ViewportId};
 use std::path::{Path, PathBuf};
@@ -254,7 +254,6 @@ enum Outcome {
     Cancelled,
 }
 
-const FPS_CHOICES: [u32; 7] = [0, 15, 24, 25, 30, 50, 60];
 const AUDIO_KBPS: [u32; 5] = [96, 128, 192, 256, 320];
 
 struct ConvertDlg {
@@ -466,7 +465,7 @@ impl ConvertDlg {
             ui.label(t("convert-fps"));
             let label = |f: u32| if f == 0 { t("convert-fps-same") } else { format!("{f} fps") };
             egui::ComboBox::from_id_salt("convert-fps").selected_text(label(self.fps)).width(180.0).show_ui(ui, |ui| {
-                for f in FPS_CHOICES {
+                for f in std::iter::once(0).chain(crate::settings::recorder::FPS_CHOICES) {
                     ui.selectable_value(&mut self.fps, f, label(f));
                 }
             });
@@ -1026,7 +1025,8 @@ fn window_titles() -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for w in crate::capture::snapshot_windows(&[]) {
         let title = w.title.trim();
-        if title.is_empty() || window_pid(w.hwnd) == pid || out.iter().any(|t| t == title) {
+        let shell = matches!(w.class.as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd" | "Progman" | "WorkerW");
+        if title.is_empty() || shell || window_pid(w.hwnd) == pid || out.iter().any(|t| t == title) {
             continue;
         }
         out.push(title.to_string());

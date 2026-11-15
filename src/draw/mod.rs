@@ -29,22 +29,13 @@ mod golden_tests;
 #[cfg(test)]
 mod tests;
 
-// Public API for the editor UI (built in a later phase on top of this module).
-#[allow(unused_imports)]
+// The parts of the API the rest of the app reaches as `draw::…`.
 pub use edit::{
-    align, apply_style, bounds, bring_forward, bring_to_front, constrain_to_axis, constrain_to_hv, delete, drag_handle,
-    duplicate, frame, handle_at, handles, hit_test, move_objects, next_id, next_step_value, next_step_value_as, paste,
-    selection_bounds, send_backward, send_to_back, serialize_selection, set_frame, translate, Align, Dir,
-    DragConstraints, Handle, HandleId, HandleKind, StylePatch,
+    bounds, drag_handle, handle_at, handles, hit_test, next_id, translate, Dir, DragConstraints, HandleId, HandleKind,
 };
-#[allow(unused_imports)]
-pub use history::{Document, Edit, History};
+pub use history::{Document, History};
 pub use model::*;
-#[allow(unused_imports)]
 pub use raster::RasterCache;
-#[allow(unused_imports)]
-pub use render::{render, render_object, render_overlay, render_vectors_onto, RenderOptions, View};
-#[allow(unused_imports)]
+pub use render::{render, render_object, render_overlay, RenderOptions, View};
 pub use sfcap::{load_sfcap, save_sfcap, Meta};
-#[allow(unused_imports)]
 pub use tools::{create, create_picture, default_style, Tool, ToolOptions};

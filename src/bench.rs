@@ -123,13 +123,19 @@ pub fn run_parent() -> i32 {
             let frames = f.get(3).copied().unwrap_or("?");
             let size = f.get(4).copied().unwrap_or("?");
             let enc = f.get(5).copied().unwrap_or("?");
+            let dup = f.get(7).copied().unwrap_or("?");
             row(
                 &format!("{size}@60 recording CPU ({enc} encoder)"),
                 format!("{total:.1} % ({core:.0} % of a core)"),
                 "< 10 %",
                 Some(total < 10.0),
             );
-            row("Recording dropped frames (5 s at 60 fps)", format!("{dropped} of {frames}"), "0", Some(dropped == 0));
+            row(
+                "Recording dropped frames (5 s at 60 fps)",
+                format!("{dropped} of {frames} ({dup} repeats)"),
+                "0",
+                Some(dropped == 0),
+            );
         }
         None => {
             let why = get("REC60_ERR").unwrap_or_else(|| "no data".into());
@@ -274,7 +280,8 @@ pub fn cpu_percent(cpu_100ns: u64, wall_secs: f64, cpus: u32) -> (f64, f64) {
 
 /// Record 5 s of the primary monitor (at most 1920×1080) at 60 fps without audio, the same
 /// way a user recording runs (control bar hidden). Returns
-/// `"<% total> <% one core> <dropped> <frames> <WxH> <hw|sw> <backend>"`.
+/// `"<% total> <% one core> <dropped> <frames> <WxH> <hw|sw> <backend> <duplicated>"`: dropped
+/// and frames as read while recording, duplicated (repeats of an unchanged screen) at the end.
 fn bench_recording(monitor: crate::common::Rect) -> anyhow::Result<String> {
     use crate::recorder::{self, Area, StartOptions};
     let rect = crate::common::Rect::new(monitor.x, monitor.y, monitor.w.min(1920), monitor.h.min(1080));
@@ -299,13 +306,14 @@ fn bench_recording(monitor: crate::common::Rect) -> anyhow::Result<String> {
     let _ = std::fs::remove_file(&f.path);
     let (total, core) = cpu_percent(cpu1.saturating_sub(cpu0), wall, logical_cpus());
     Ok(format!(
-        "{total:.1} {core:.1} {} {} {}x{} {} {}",
-        status.dropped.max(f.dropped),
-        f.frames,
+        "{total:.1} {core:.1} {} {} {}x{} {} {} {}",
+        status.dropped,
+        status.frames,
         rect.w & !1,
         rect.h & !1,
         if f.hardware_encoder { "hw" } else { "sw" },
-        f.backend
+        f.backend,
+        f.duplicated
     ))
 }
 

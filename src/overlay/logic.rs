@@ -359,10 +359,6 @@ impl State {
         matches!(self.phase, Phase::Dragging { .. }).then_some(self.cursor)
     }
 
-    pub fn is_dragging(&self) -> bool {
-        matches!(self.phase, Phase::Dragging { .. } | Phase::Adjust { drag: Some(_), .. } | Phase::Drawing { .. })
-    }
-
     fn hover_rect_or_monitor(&self, p: Point) -> Rect {
         match &self.hover {
             Some(h) => h.current().1.intersect(&self.bounds),

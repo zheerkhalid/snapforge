@@ -226,6 +226,15 @@ pub fn properties_bar(
                     s.shadow = on.then(Shadow::default);
                 }
                 if let Some(sh) = &mut s.shadow {
+                    color_slot(
+                        ui,
+                        "shadow",
+                        &mut sh.color,
+                        &t("draw-prop-shadow"),
+                        false,
+                        ColorSlot::Shadow,
+                        &mut pick,
+                    );
                     ui.add(
                         egui::DragValue::new(&mut sh.blur).range(0.0..=40.0).speed(0.2).max_decimals(0).prefix("◌ "),
                     )

@@ -122,6 +122,12 @@ pub fn size_text(r: &Rect) -> String {
     format!("{} \u{00D7} {}", r.w, r.h)
 }
 
+/// The loupe's RGB readout line.
+fn loupe_rgb(r: u8, g: u8, b: u8) -> String {
+    let n = |v: u8| v.to_string();
+    crate::i18n::tf("overlay-loupe-rgb", &[("r", &n(r)), ("g", &n(g)), ("b", &n(b))])
+}
+
 struct Builder<'a> {
     sc: Scene,
     env: &'a mut dyn Env,
@@ -230,8 +236,7 @@ impl Builder<'_> {
         let border = self.bw();
         let px = self.env.pixel(c).unwrap_or([0, 0, 0, 255]);
         let (b, g, r) = (px[0], px[1], px[2]);
-        let mut lines =
-            vec![format!("{}, {}", c.x, c.y), format!("#{r:02X}{g:02X}{b:02X}"), format!("RGB {r}, {g}, {b}")];
+        let mut lines = vec![format!("{}, {}", c.x, c.y), format!("#{r:02X}{g:02X}{b:02X}"), loupe_rgb(r, g, b)];
         if let Some(s) = sel {
             lines.push(size_text(&s));
         }

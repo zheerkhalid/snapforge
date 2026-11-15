@@ -3,9 +3,8 @@
 use crate::common::Image;
 use crate::effects::text::{render_text_styled, FontSpec, TextAlign};
 use crate::effects::{composite, drop_shadow, flatten_onto, Color, Orientation, ShadowParams};
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -162,16 +161,6 @@ pub fn combine_images(items: &[CombineItem], p: &CombineParams) -> Image {
         }
     }
     flatten_onto(&out, p.background)
-}
-
-/// Load files and combine them, labelled with their file names.
-pub fn combine_files(paths: &[PathBuf], p: &CombineParams) -> Result<Image> {
-    let mut items = Vec::with_capacity(paths.len());
-    for path in paths {
-        let image = crate::output::save::load_image(path).with_context(|| format!("combine: {}", path.display()))?;
-        items.push(CombineItem { image, label: file_label(path) });
-    }
-    Ok(combine_images(&items, p))
 }
 
 pub(crate) fn file_label(path: &Path) -> String {

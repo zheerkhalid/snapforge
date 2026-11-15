@@ -20,16 +20,12 @@ pub(crate) mod tests;
 use crate::common::Image;
 use serde::{Deserialize, Serialize};
 
-// The flat `effects::name` API for the editor; some are unused until the UI is wired up.
-#[allow(unused_imports)]
+// The flat `effects::name` API.
 pub use color::*;
-#[allow(unused_imports)]
 pub use filter::*;
 pub use fx::*;
 pub use geometry::*;
-#[allow(unused_imports)]
 pub use pixel::*;
-#[allow(unused_imports)]
 pub use selection::*;
 
 /// A straight-alpha (not premultiplied) RGBA colour. `Default` is fully transparent.
@@ -98,7 +94,6 @@ impl Default for Sides {
 
 impl Sides {
     pub const ALL: Sides = Sides { top: true, right: true, bottom: true, left: true };
-    pub const NONE: Sides = Sides { top: false, right: false, bottom: false, left: false };
     pub const BOTTOM: Sides = Sides { top: false, right: false, bottom: true, left: false };
 }
 
@@ -110,12 +105,6 @@ pub struct Edges {
     pub top: u32,
     pub right: u32,
     pub bottom: u32,
-}
-
-impl Edges {
-    pub const fn uniform(v: u32) -> Self {
-        Self { left: v, top: v, right: v, bottom: v }
-    }
 }
 
 /// One of nine anchor positions (canvas size, watermark placement).
@@ -205,9 +194,7 @@ impl Mask {
     pub fn new(width: u32, height: u32) -> Self {
         Self { width, height, data: vec![0; width as usize * height as usize] }
     }
-    pub fn full(width: u32, height: u32) -> Self {
-        Self { width, height, data: vec![255; width as usize * height as usize] }
-    }
+    #[cfg(test)]
     #[inline]
     pub fn get(&self, x: u32, y: u32) -> u8 {
         self.data[y as usize * self.width as usize + x as usize]

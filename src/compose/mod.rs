@@ -10,10 +10,7 @@ pub mod split;
 #[cfg(test)]
 mod tests;
 
-// Convenience re-exports for the UI; unused until the Tools menu is wired up.
-#[allow(unused_imports)]
+// Entry points used by the Tools dialogs.
 pub use batch::batch_print;
-#[allow(unused_imports)]
-pub use combine::{combine_files, combine_images, CombineItem, CombineParams};
-#[allow(unused_imports)]
-pub use pdf::{images_to_pdf, PdfOptions, PdfSource};
+pub use combine::combine_images;
+pub use pdf::images_to_pdf;

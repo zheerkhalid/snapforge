@@ -255,10 +255,6 @@ impl Session {
         self.source.is_some() && (self.edit != self.saved || self.pending.is_some())
     }
 
-    pub fn duration(&self) -> u64 {
-        self.tl.duration_ms
-    }
-
     pub fn source_duration(&self) -> u64 {
         self.source.as_ref().map(|s| s.info.duration_ms).unwrap_or(0)
     }

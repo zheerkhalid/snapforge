@@ -35,10 +35,6 @@ impl Rgb {
     pub fn luma(self) -> f32 {
         (0.2126 * self.r as f32 + 0.7152 * self.g as f32 + 0.0722 * self.b as f32) / 255.0
     }
-
-    pub fn inverted(self) -> Rgb {
-        Rgb::new(255 - self.r, 255 - self.g, 255 - self.b)
-    }
 }
 
 /// Hue in degrees [0, 360), saturation and value in [0, 1].

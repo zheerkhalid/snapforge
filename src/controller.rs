@@ -20,10 +20,10 @@ use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetAncestor,
-    GetForegroundWindow, GetMessageW, KillTimer, MessageBoxW, PostQuitMessage, RegisterClassW, SendMessageTimeoutW,
-    SetTimer, TranslateMessage, WindowFromPoint, ASFW_ANY, GA_ROOT, HWND_MESSAGE, IDYES, MB_ICONINFORMATION, MB_YESNO,
-    MSG, SMTO_ABORTIFHUNG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COPYDATA, WM_TIMER, WNDCLASSW,
+    AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetForegroundWindow,
+    GetMessageW, KillTimer, PostQuitMessage, RegisterClassW, SendMessageTimeoutW, SetTimer, TranslateMessage,
+    WindowFromPoint, ASFW_ANY, HWND_MESSAGE, MSG, SMTO_ABORTIFHUNG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COPYDATA,
+    WM_TIMER, WNDCLASSW,
 };
 
 pub const APP_CLASS: &str = "SnapForge.App";
@@ -31,7 +31,6 @@ const COPYDATA_ARGS: usize = 0x5346_4152; // "SFAR"
 
 const TIMER_AUTO_CAPTURE: usize = 1;
 const TIMER_IDLE: usize = 2;
-const TIMER_SETTINGS_WATCH: usize = 3;
 const IDLE_RELEASE_MS: u32 = 10_000;
 
 /// Bench support: QPC timestamp when the most recent capture command started executing.
@@ -49,8 +48,6 @@ struct State {
     last: Option<LastCapture>,
     /// Exit after the pending output finishes (standalone CLI run).
     exit_after_output: bool,
-    settings_mtime: Option<std::time::SystemTime>,
-    settings_watch_ticks: u32,
 }
 
 type Job = Box<dyn FnOnce() + Send>;
@@ -130,6 +127,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     let standalone_capture = cli.capture.is_some() && !cli.bench_child;
     if !standalone_capture {
         tray::create()?;
+        if let Some(e) = settings::take_load_error() {
+            let text = i18n::tf("notify-settings-invalid", &[("path", &settings::path().display().to_string())]);
+            log::warn!("settings: {e}");
+            tray::notify(&i18n::t("app-name"), &text, true);
+        }
         toolbar::create()?;
         let show_toolbar = cli.show_toolbar || (!cli.tray && settings::get().toolbar.visible);
         if show_toolbar {
@@ -314,7 +316,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                     let _ = KillTimer(hwnd, TIMER_IDLE);
                     go_idle();
                 }
-                TIMER_SETTINGS_WATCH => settings_watch_tick(),
                 _ => {}
             }
             LRESULT(0)
@@ -387,7 +388,6 @@ fn execute(cmd: AppCommand) {
             settings::update(|s| s.output.timestamp = !s.output.timestamp);
             refresh_ui();
         }
-        AppCommand::ShowToolbar(v) => toolbar::show(v),
         AppCommand::ToggleToolbar => toolbar::toggle(),
         AppCommand::OpenEditor => editor::show(),
         AppCommand::OpenSettings => editor::open_settings(),
@@ -491,7 +491,7 @@ fn start_capture(req: CaptureRequest) {
         Ok(None) => finish(None),
         Err(e) => {
             log::error!("capture failed: {e}");
-            tray::notify(&i18n::t("app-name"), &i18n::tf("notify-error", &[("error", &e.to_string())]), true);
+            tray::notify(&i18n::t("app-name"), &capture_error_text(&e), true);
             finish(None);
         }
     }
@@ -597,7 +597,7 @@ fn start_scrolling(req: &CaptureRequest, opts: &GrabOptions) -> Result<bool, Cap
             }))),
             Err(e) => {
                 log::error!("scrolling capture failed: {e}");
-                app::notify(i18n::t("app-name"), i18n::tf("notify-error", &[("error", &e.to_string())]), true);
+                app::notify(i18n::t("app-name"), capture_error_text(&e), true);
                 app::post(AppCommand::Captured(Box::new(CaptureOutcome {
                     image: Image::new(0, 0),
                     mode: CaptureMode::Scrolling,
@@ -631,7 +631,7 @@ fn repeat_last() {
         Ok(img) => deliver(outcome(img, last.mode, last.source)),
         Err(e) => {
             log::warn!("repeat capture failed: {e}");
-            tray::notify(&i18n::t("app-name"), &i18n::tf("notify-error", &[("error", &e.to_string())]), true);
+            tray::notify(&i18n::t("app-name"), &capture_error_text(&e), true);
         }
     }
     schedule_idle();
@@ -650,9 +650,7 @@ fn recapture(last: &LastCapture, opts: &GrabOptions) -> Result<Image, CaptureErr
             };
             Ok(overlay::render_selection(&frozen, &sel))
         }
-        CaptureSource::Scrolling | CaptureSource::Other => {
-            Err(CaptureError::Failed("cannot repeat this capture".into()))
-        }
+        CaptureSource::Scrolling => Err(CaptureError::NotRepeatable),
     }
 }
 
@@ -712,7 +710,7 @@ fn deliver(o: CaptureOutcome) {
         }
         return;
     }
-    if !matches!(o.source, CaptureSource::Scrolling | CaptureSource::Other) {
+    if !matches!(o.source, CaptureSource::Scrolling) {
         with_state(|s| s.last = Some(LastCapture { mode: o.mode, source: o.source.clone() }));
     }
     let s = settings::snapshot();
@@ -737,7 +735,20 @@ fn deliver(o: CaptureOutcome) {
 
 fn capture_title() -> String {
     let t = DateTime::now_local();
-    format!("Capture {:02}:{:02}:{:02}", t.hour, t.minute, t.second)
+    i18n::tf("capture-title", &[("time", &format!("{:02}:{:02}:{:02}", t.hour, t.minute, t.second))])
+}
+
+/// A capture error for a notification, in the UI language (the enum's `Display` stays
+/// English for the log).
+fn capture_error_text(e: &CaptureError) -> String {
+    let reason = match e {
+        CaptureError::Empty => i18n::t("capture-error-empty"),
+        CaptureError::WindowGone => i18n::t("capture-error-window-gone"),
+        CaptureError::Cancelled => i18n::t("capture-error-cancelled"),
+        CaptureError::NotRepeatable => i18n::t("capture-error-not-repeatable"),
+        CaptureError::Failed(detail) => i18n::tf("capture-error-failed", &[("detail", detail)]),
+    };
+    i18n::tf("notify-error", &[("error", &reason)])
 }
 
 fn exit_if(flag: bool) {
@@ -896,7 +907,7 @@ fn remember_folder(path: &Path) {
     });
 }
 
-// ------------------------------------------------------------------ idle, settings, about
+// ------------------------------------------------------------------ idle
 
 fn schedule_idle() {
     // SAFETY: timer on our own message window.
@@ -915,72 +926,6 @@ fn go_idle() {
         unsafe {
             let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
         }
-    }
-}
-
-/// Settings UI arrives in Phase 6; until then open the TOML file and watch for edits.
-// Superseded by the Settings window (editor::open_settings); kept for the settings-file watcher.
-#[allow(dead_code)]
-fn open_settings_file() {
-    let p = settings::path();
-    if !p.exists() {
-        settings::flush();
-    }
-    win::shell_open(&p.display().to_string());
-    let mtime = std::fs::metadata(&p).and_then(|m| m.modified()).ok();
-    with_state(|s| {
-        s.settings_mtime = mtime;
-        s.settings_watch_ticks = 0;
-    });
-    // SAFETY: timer on our own message window.
-    unsafe {
-        SetTimer(app_hwnd(), TIMER_SETTINGS_WATCH, 1000, None);
-    }
-}
-
-fn settings_watch_tick() {
-    let p = settings::path();
-    let mtime = std::fs::metadata(&p).and_then(|m| m.modified()).ok();
-    let (changed, expired) = with_state(|s| {
-        s.settings_watch_ticks += 1;
-        let changed = mtime.is_some() && mtime != s.settings_mtime;
-        s.settings_mtime = mtime;
-        (changed, s.settings_watch_ticks > 30 * 60)
-    });
-    if changed {
-        match settings::load_from(&p) {
-            Ok(new) if new != settings::snapshot() => {
-                settings::replace(new);
-                app::post(AppCommand::SettingsChanged);
-                log::info!("settings reloaded from disk");
-            }
-            Ok(_) => {}
-            Err(e) => tray::notify(&i18n::t("app-name"), &format!("settings.toml: {e}"), true),
-        }
-    }
-    if expired {
-        // SAFETY: timer on our own message window.
-        unsafe {
-            let _ = KillTimer(app_hwnd(), TIMER_SETTINGS_WATCH);
-        }
-    }
-}
-
-// Superseded by Settings ▸ About (editor::open_about).
-#[allow(dead_code)]
-fn show_about() {
-    let text = format!(
-        "{} {}\n{}\n\n{}\nhttps://zheer.dev\n\nOpen the developer's website?",
-        i18n::t("app-name"),
-        env!("CARGO_PKG_VERSION"),
-        i18n::t("app-tagline"),
-        i18n::t("app-credit"),
-    );
-    let (t, c) = (wide(&text), wide(&i18n::t("tray-about")));
-    // SAFETY: valid NUL-terminated strings.
-    let r = unsafe { MessageBoxW(HWND::default(), pcwstr(&t), pcwstr(&c), MB_YESNO | MB_ICONINFORMATION) };
-    if r == IDYES {
-        win::shell_open("https://zheer.dev");
     }
 }
 
@@ -1014,15 +959,6 @@ fn uninstall_cleanup() -> i32 {
         0
     } else {
         1
-    }
-}
-
-/// Root window under a point (used by tools that need the real window, not the overlay).
-pub fn root_window_at(x: i32, y: i32) -> isize {
-    // SAFETY: plain queries.
-    unsafe {
-        let h = WindowFromPoint(POINT { x, y });
-        hwnd_to_isize(GetAncestor(h, GA_ROOT))
     }
 }
 

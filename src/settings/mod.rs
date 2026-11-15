@@ -503,22 +503,6 @@ impl HotkeySettings {
         ]
     }
 
-    /// Mutable access to an extra hotkey by its label key.
-    pub fn extra_mut(&mut self, key: &str) -> Option<&mut String> {
-        Some(match key {
-            "menu-record-region" => &mut self.record_region,
-            "menu-record-fullscreen" => &mut self.record_full_screen,
-            "menu-record-stop" => &mut self.stop_recording,
-            "menu-record-pause" => &mut self.pause_recording,
-            "menu-capture-text" => &mut self.capture_text,
-            "menu-pin-capture" => &mut self.pin_capture,
-            "menu-color-picker" => &mut self.color_picker,
-            "menu-magnifier" => &mut self.magnifier,
-            "menu-ruler" => &mut self.ruler,
-            _ => return None,
-        })
-    }
-
     pub fn for_mode(&self, m: CaptureMode) -> &str {
         match m {
             CaptureMode::ActiveWindow => &self.active_window,
@@ -664,6 +648,8 @@ pub fn save_to(s: &Settings, p: &std::path::Path) -> anyhow::Result<()> {
 }
 
 static SETTINGS: OnceLock<RwLock<Settings>> = OnceLock::new();
+/// Why an existing settings.toml could not be used at startup (reported once by the app).
+static LOAD_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// Load settings from disk (defaults if missing or invalid). Idempotent.
 pub fn init() {
@@ -675,12 +661,20 @@ pub fn init() {
                 if p.exists() {
                     log::warn!("settings: could not parse {}: {e}; using defaults", p.display());
                     let _ = std::fs::copy(&p, p.with_extension("toml.bad"));
+                    if let Ok(mut slot) = LOAD_ERROR.lock() {
+                        *slot = Some(format!("{e:#}"));
+                    }
                 }
                 Settings::default()
             }
         };
         RwLock::new(s)
     });
+}
+
+/// The error that made [`init`] fall back to defaults, if any (returned once).
+pub fn take_load_error() -> Option<String> {
+    LOAD_ERROR.lock().ok().and_then(|mut e| e.take())
 }
 
 fn cell() -> &'static RwLock<Settings> {

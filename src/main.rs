@@ -2,8 +2,6 @@
 //! Developed by Zheer Khalid (https://zheer.dev).
 
 #![windows_subsystem = "windows"]
-// Temporary while Phase 1 modules are being filled in; removed at integration.
-#![allow(dead_code)]
 
 mod app;
 mod bench;

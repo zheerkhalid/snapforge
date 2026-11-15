@@ -187,7 +187,6 @@ pub struct VideoReader {
     frame_w: u32,
     frame_h: u32,
     stride: i32,
-    pub hardware: bool,
 }
 
 impl VideoReader {
@@ -234,7 +233,6 @@ impl VideoReader {
             reader.SetCurrentMediaType(VIDEO_STREAM, None, &out).context("the video cannot be converted to RGB")?;
             let mut r = Self {
                 reader,
-                hardware: dxgi.is_some(),
                 _dxgi: dxgi,
                 info: MediaInfo {
                     duration_ms: 0,
@@ -610,7 +608,6 @@ pub struct Mp4Writer {
     audio: Option<(u32, u32, u32)>, // (stream, rate, channels)
     cfg: WriterConfig,
     audio_frames: i64,
-    pub hardware: bool,
 }
 
 impl Mp4Writer {
@@ -695,7 +692,7 @@ impl Mp4Writer {
                 }
             }
             writer.BeginWriting().context("could not start writing the MP4")?;
-            Ok(Self { writer, video, audio, cfg, audio_frames: 0, hardware })
+            Ok(Self { writer, video, audio, cfg, audio_frames: 0 })
         }
     }
 

@@ -65,20 +65,9 @@ mod tools_dialogs;
 mod view;
 mod window;
 
-// The extension surface for the integration pass (effects, draw, tools); unused until then.
-#[allow(unused_imports)]
-pub use document::Document;
-#[allow(unused_imports)]
-pub use effects::{
-    downscale_proxy, ApplyFn, EffectCtx, EffectDef, EffectRegistry, MenuSlot, ParamDef, ParamKind, ParamValue,
-    ParamValues, Scope,
-};
-#[allow(unused_imports)]
-pub use ext::{CanvasTool, DocOverlay, ToolInput, ToolsContext, ToolsHost};
-#[allow(unused_imports)]
-pub use history::{Budget, StepKind};
-#[allow(unused_imports)]
-pub use selection::{CanvasMap, Selection};
+// The extension surface (effects, draw tools, Tools dialogs).
+pub use effects::EffectRegistry;
+pub use ext::{CanvasTool, DocOverlay, ToolsContext, ToolsHost};
 
 use crate::common::time::qpc_now;
 use crate::common::Image;

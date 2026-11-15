@@ -52,6 +52,7 @@ pub fn diagonal_from_mm(w_mm: i32, h_mm: i32, w_px: u32, h_px: u32) -> Option<f6
 }
 
 /// Default diagonal for a monitor: from its reported size, else as if it were 96 PPI.
+#[cfg(test)]
 pub fn default_diagonal(w_mm: i32, h_mm: i32, w_px: u32, h_px: u32) -> f64 {
     diagonal_from_mm(w_mm, h_mm, w_px, h_px).unwrap_or_else(|| diagonal_from_ppi(w_px, h_px, DEFAULT_PPI))
 }
@@ -69,6 +70,7 @@ pub fn px_to_unit(px: f64, unit: RulerUnit, ppi: f64) -> f64 {
     px / px_per_unit(unit, ppi)
 }
 
+#[cfg(test)]
 pub fn unit_to_px(v: f64, unit: RulerUnit, ppi: f64) -> f64 {
     v * px_per_unit(unit, ppi)
 }
@@ -150,6 +152,7 @@ pub fn angle_between(c: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
 }
 
 /// Counter-clockwise sweep from ray c→a to ray c→b, in [0, 360).
+#[cfg(test)]
 pub fn sweep_ccw(c: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
     (direction_deg(c, b) - direction_deg(c, a)).rem_euclid(360.0)
 }

@@ -48,6 +48,7 @@ pub struct View {
 
 impl View {
     /// The whole image at 100%.
+    #[cfg(test)]
     pub fn identity(width: u32, height: u32) -> View {
         View { x: 0.0, y: 0.0, zoom: 1.0, width, height }
     }
@@ -56,11 +57,13 @@ impl View {
         Transform::from_scale(z, z).pre_translate(-self.x, -self.y)
     }
     /// Layer pixel → image point.
+    #[cfg(test)]
     pub fn to_image(self, px: f32, py: f32) -> Pt {
         let z = if self.zoom > 0.0 { self.zoom } else { 1.0 };
         Pt::new(self.x + px / z, self.y + py / z)
     }
     /// Image point → layer pixel.
+    #[cfg(test)]
     pub fn to_view(self, p: Pt) -> (f32, f32) {
         ((p.x - self.x) * self.zoom, (p.y - self.y) * self.zoom)
     }

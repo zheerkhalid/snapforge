@@ -128,7 +128,8 @@ pub fn copy_text(text: &str) -> Result<()> {
     set_bytes(CF_UNICODETEXT, bytes)
 }
 
-/// Text currently on the clipboard, if any.
+/// Text currently on the clipboard, if any (the round-trip test reads it back).
+#[cfg(test)]
 pub fn paste_text() -> Option<String> {
     let _g = OpenGuard::open().ok()?;
     let b = get_bytes(CF_UNICODETEXT)?;

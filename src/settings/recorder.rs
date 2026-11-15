@@ -16,21 +16,11 @@ pub enum VideoFormat {
 }
 
 impl VideoFormat {
-    pub const ALL: [VideoFormat; 3] = [VideoFormat::Mp4, VideoFormat::Wmv, VideoFormat::Mp3AudioOnly];
-
     pub fn extension(self) -> &'static str {
         match self {
             VideoFormat::Mp4 => "mp4",
             VideoFormat::Wmv => "wmv",
             VideoFormat::Mp3AudioOnly => "mp3",
-        }
-    }
-
-    pub fn label_key(self) -> &'static str {
-        match self {
-            VideoFormat::Mp4 => "rec-format-mp4",
-            VideoFormat::Wmv => "rec-format-wmv",
-            VideoFormat::Mp3AudioOnly => "rec-format-mp3",
         }
     }
 }

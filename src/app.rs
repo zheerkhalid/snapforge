@@ -22,7 +22,6 @@ pub enum CaptureSource {
     MultiRect(Vec<Rect>),
     Window(isize),
     Scrolling,
-    Other,
 }
 
 /// A finished capture travelling to the output pipeline.
@@ -70,7 +69,6 @@ pub enum ToolWindow {
     BatchPrint,
     ConvertToMp4,
     ScheduleRecording,
-    Settings,
 }
 
 pub enum AppCommand {
@@ -85,7 +83,6 @@ pub enum AppCommand {
     ToggleAutoCopy,
     TogglePreview,
     ToggleTimestamp,
-    ShowToolbar(bool),
     ToggleToolbar,
     OpenEditor,
     OpenSettings,

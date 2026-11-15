@@ -28,7 +28,8 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
-/// Effects opened as a canvas session instead of a schema dialog.
+/// Effects opened as a canvas session instead of a schema dialog (the tests check each one).
+#[cfg(test)]
 pub const INTERACTIVE: [&str; 5] =
     ["image.transparency", "effects.spotlight", "image.remove_strip", "image.insert_strip", "effects.watermark"];
 /// Shows a result instead of changing the image.

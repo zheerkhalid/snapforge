@@ -30,9 +30,6 @@ impl Segment {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn contains(&self, t: u64) -> bool {
-        t >= self.start_ms && t < self.end_ms
-    }
 }
 
 /// Where a title card sits in the output.

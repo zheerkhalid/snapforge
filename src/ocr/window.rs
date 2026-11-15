@@ -68,7 +68,6 @@ const SS_ENDELLIPSIS: u32 = 0x4000;
 const EM_SETLIMITTEXT: u32 = 0x00C5;
 
 struct OcrWin {
-    hwnd: HWND,
     label: HWND,
     combo: HWND,
     status: HWND,
@@ -273,7 +272,6 @@ pub fn open(img: Image) {
     }
     let slot: Slot = Arc::new(Mutex::new(None));
     let st = OcrWin {
-        hwnd,
         label,
         combo,
         status,

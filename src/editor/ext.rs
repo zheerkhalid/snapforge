@@ -48,8 +48,6 @@ pub struct ToolInput {
     pub released: bool,
     pub double_clicked: bool,
     pub modifiers: egui::Modifiers,
-    /// Secondary (right) button clicked over the canvas this frame.
-    pub secondary_clicked: bool,
     /// Vertical wheel movement in points this frame (tools that [`CanvasTool::wants_wheel`]).
     pub scroll: f32,
     /// The pointer is over the canvas.
@@ -95,8 +93,6 @@ pub struct ToolsContext {
     pub files: Vec<PathBuf>,
     /// All open images (title, pixels), active one first.
     pub images: Vec<(String, Arc<Image>)>,
-    /// Editor window, for owning dialogs.
-    pub owner_hwnd: isize,
 }
 
 /// Implemented by the integration pass for Tools ▸ Combine Images / Convert Images to

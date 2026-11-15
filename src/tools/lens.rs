@@ -25,6 +25,7 @@ pub fn output_coord(s: f64, out_len: i32, center: i32, zoom: f64) -> f64 {
 }
 
 /// Source pixel shown at output pixel `(ox, oy)` without interpolation.
+#[cfg(test)]
 pub fn source_pixel(ox: i32, oy: i32, out: (i32, i32), center: Point, zoom: f64) -> Point {
     Point::new(
         source_coord(ox, out.0, center.x, zoom).floor() as i32,
@@ -150,6 +151,7 @@ impl Grid {
     }
 
     /// Source pixel under grid-local point `(lx, ly)`, if inside the grid.
+    #[cfg(test)]
     pub fn source_at(&self, center: Point, lx: i32, ly: i32) -> Option<Point> {
         if lx < 0 || ly < 0 || lx >= self.side() || ly >= self.side() {
             return None;

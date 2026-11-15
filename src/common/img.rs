@@ -178,12 +178,6 @@ impl Image {
         }
         out
     }
-
-    /// Dimmed copy for overlay backgrounds: `c * num / 256`.
-    pub fn dimmed(&self, num: u32) -> Image {
-        let data = self.data.iter().map(|&c| ((c as u32 * num) >> 8) as u8).collect();
-        Image { width: self.width, height: self.height, data }
-    }
 }
 
 #[cfg(test)]

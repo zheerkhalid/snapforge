@@ -246,10 +246,6 @@ impl RasterCache {
         Self::default()
     }
 
-    pub fn invalidate(&mut self) {
-        *self = Self::default();
-    }
-
     /// The effective base. `base_rev` must change whenever the base pixels change
     /// (see [`super::Document::base_rev`]).
     pub fn get<'a>(

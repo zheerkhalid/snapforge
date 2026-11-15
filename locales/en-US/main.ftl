@@ -65,6 +65,15 @@ notify-uploaded = Uploaded: { $url }
 notify-error = Something went wrong: { $error }
 notify-hotkey-failed = Hotkey { $key } is in use by another program
 notify-scroll-stop = Scrolling capture: press Esc or click to stop
+notify-settings-invalid = { $path } could not be read, so the default settings are used. The old file was kept as settings.toml.bad.
+hotkey-window-failed = Hotkeys are unavailable: their message window could not be created
+capture-title = Capture { $time }
+capture-error-empty = the selected area is empty
+capture-error-window-gone = the window no longer exists
+capture-error-cancelled = the capture was cancelled
+capture-error-not-repeatable = this kind of capture cannot be repeated
+capture-error-failed = the screen could not be captured ({ $detail })
+overlay-loupe-rgb = RGB { $r }, { $g }, { $b }
 
 ## Overlay hints
 hint-region = Drag to select · Click a window to select it · Tab switches corner · Arrows nudge 1 px · Right-click or Esc cancels
@@ -338,6 +347,11 @@ settings-rec-audio = Audio
 settings-rec-webcam = Webcam
 settings-rec-notifications = Notifications
 settings-rec-hotkeys = Hotkeys
+settings-rec-mic-device = Microphone
+settings-rec-mic-default = Default microphone
+settings-rec-camera-device = Camera
+settings-rec-camera-default = First camera found
+settings-rec-device-missing = (device not connected)
 settings-language-choose = Display language
 settings-language-missing = { $code } (not installed)
 settings-language-restart = The new language is used after SnapForge restarts.

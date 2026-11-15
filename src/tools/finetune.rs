@@ -182,6 +182,7 @@ pub fn open(c: Rgb, near: Point) {
 }
 
 /// Change the adjusted color (keeps the picked one), as if the user moved a slider.
+#[cfg(test)]
 pub(super) fn set_adjusted(c: Rgb) {
     with(|p| {
         p.hsv = color::hsv_ints(c);

@@ -69,7 +69,6 @@ pub enum Outcome {
 /// A running export.
 pub struct ExportJob {
     pub progress: Arc<Progress>,
-    pub path: PathBuf,
     rx: Receiver<Result<Outcome, String>>,
 }
 
@@ -85,7 +84,6 @@ pub fn spawn(req: ExportRequest, wake: impl Fn() + Send + 'static) -> ExportJob 
     let progress = Arc::new(Progress::default());
     let (tx, rx) = channel();
     let p = progress.clone();
-    let path = req.path.clone();
     let res = std::thread::Builder::new().name("video-export".into()).spawn(move || {
         let out = run(&req, &p, &wake).map_err(|e| format!("{e:#}"));
         if !matches!(out, Ok(Outcome::Done(_))) {
@@ -97,7 +95,7 @@ pub fn spawn(req: ExportRequest, wake: impl Fn() + Send + 'static) -> ExportJob 
     if let Err(e) = res {
         log::error!("video editor: cannot start the export thread: {e}");
     }
-    ExportJob { progress, path, rx }
+    ExportJob { progress, rx }
 }
 
 /// Run an export synchronously (on the calling thread).

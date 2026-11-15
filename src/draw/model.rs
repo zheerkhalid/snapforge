@@ -477,6 +477,7 @@ impl Kind {
         matches!(self, Kind::Blur(_) | Kind::Eraser(_) | Kind::Fill(_) | Kind::Pencil(_))
     }
     /// Short stable name ("text", "line", ...), same as the serde tag.
+    #[cfg(test)]
     pub fn name(&self) -> &'static str {
         match self {
             Kind::Text(_) => "text",
@@ -626,18 +627,6 @@ pub enum LineKind {
     ElbowH,
     /// L-line: vertical first, then horizontal.
     ElbowV,
-}
-
-impl LineKind {
-    pub const ALL: [LineKind; 7] = [
-        LineKind::Straight,
-        LineKind::Quad,
-        LineKind::Cubic,
-        LineKind::Polyline,
-        LineKind::Smooth,
-        LineKind::ElbowH,
-        LineKind::ElbowV,
-    ];
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -899,12 +888,6 @@ impl StepValue {
                 s.reverse();
                 String::from_utf8_lossy(&s).into_owned()
             }
-        }
-    }
-    pub fn next(&self) -> StepValue {
-        match *self {
-            StepValue::Number(n) => StepValue::Number((n + 1).min(Self::MAX_NUMBER)),
-            StepValue::Letter(i) => StepValue::Letter(i.saturating_add(1)),
         }
     }
 }

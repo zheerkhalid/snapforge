@@ -20,11 +20,12 @@ pub fn execute(cmd: AppCommand) {
                 crate::ocr::capture_text_flow(img);
             }
         }
-        AppCommand::ScreenTool(t) => crate::tools::open(t),
+        // Hotkeys, the toolbar and the tray menu open a tool, or close it when it is open.
+        AppCommand::ScreenTool(t) => crate::tools::toggle(t),
         AppCommand::Record(target) => crate::recorder::select_and_start(target),
         AppCommand::StopRecording => crate::recorder::stop(),
         AppCommand::TogglePauseRecording => crate::recorder::toggle_pause(),
-        AppCommand::OpenSettings | AppCommand::OpenTool(ToolWindow::Settings) => crate::editor::open_settings(),
+        AppCommand::OpenSettings => crate::editor::open_settings(),
         AppCommand::About => crate::editor::open_about(),
         AppCommand::OpenTool(ToolWindow::CombineImages) => crate::editor::open_combine_images(),
         AppCommand::OpenTool(ToolWindow::ImagesToPdf) => crate::editor::open_images_to_pdf(),
