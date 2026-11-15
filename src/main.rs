@@ -28,6 +28,7 @@ mod settings_ui;
 mod toolbar;
 mod tools;
 mod tray;
+mod video_editor;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
