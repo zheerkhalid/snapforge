@@ -43,7 +43,13 @@ docs/USAGE.md
 | serde, toml, serde_json | 1 / 0.8 / 1 | Settings and `.sfcap` metadata | small |
 | anyhow, thiserror, log | 1 / 2 / 0.4 | Error handling and logging | small |
 
-Later phases add `pdf-writer`, `zip`, `gif`/`gifski` and `mp3lame-encoder`. Each will be justified here when it is added.
+| pdf-writer | 0.12 | Images to PDF (raw PDF objects only) | ~0.1 MB |
+| miniz_oxide | 0.8 | PDF Flate streams (already in the tree via PNG) | 0 |
+| zip | 4 (deflate only) | `.sfcap` projects | ~0.1 MB |
+| gif | 0.14 | Animated GIF export (already in the tree via `image`) | 0 |
+| windows-core | 0.58 | `#[implement]` for COM callbacks (already in the tree) | 0 |
+
+Not needed in the end: `mp3lame-encoder` (Windows' built-in MP3 encoder MFT is used), `gifski` (GPL licensing and about 1 MB), and `cosmic-text` (DirectWrite renders text instead, adding nothing to the binary). The final release EXE is **8.6 MB**.
 
 ## Milestones
 
