@@ -910,6 +910,11 @@ impl EditorApp {
                     self.jobs.copy(d.export_job(d.selection.is_some()));
                 }
             }
+            Action::CopyImage => {
+                if let Some(d) = self.tabs.active() {
+                    self.jobs.copy(d.export_job(false));
+                }
+            }
             Action::Cut => {
                 if self.copy_objects(ctx) {
                     if let Some(d) = self.tabs.active_mut() {
@@ -1495,9 +1500,11 @@ impl EditorApp {
                 }
                 _ => None,
             };
+            let mut canvas_resp = None;
             if let Some(doc) = self.tabs.active_mut() {
                 let cx = CanvasCtx { tool: &tool, external, space_down: space, background: bg, checker: &checker };
                 let out = canvas::show(ui, doc, &mut self.canvas, cx);
+                canvas_resp = Some(out.response.clone());
                 annot::with_state(|s| s.text_edit_ui(ui.ctx(), doc));
                 self.hover_px = out.hover_px;
                 if out.painted {
@@ -1509,6 +1516,12 @@ impl EditorApp {
             } else {
                 self.hover_px = None;
                 self.empty_state(ui);
+            }
+            // Right-click on the image: copy, paste, save…
+            if let Some(resp) = canvas_resp {
+                if !blocked && !self.canvas.is_dragging() {
+                    resp.context_menu(|ui| self.canvas_menu(ui));
+                }
             }
         });
         // Drop hint while files are dragged over the window.

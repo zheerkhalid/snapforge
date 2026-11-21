@@ -24,6 +24,10 @@ struct FakeDriver {
     cancel_after: Option<u32>,
     wheel_calls: u32,
     page_calls: u32,
+    /// Input takes effect this many ms after it is sent (browsers apply wheel input late).
+    latency_ms: f64,
+    /// A scroll that was sent but has not reached the view yet: (due time, x, y).
+    pending: Option<(f64, i32, i32)>,
 }
 
 impl FakeDriver {
@@ -45,7 +49,23 @@ impl FakeDriver {
             cancel_after: None,
             wheel_calls: 0,
             page_calls: 0,
+            latency_ms: 0.0,
+            pending: None,
         }
+    }
+
+    /// Scroll to (nx, ny), now or after the input latency.
+    fn scroll_to(&mut self, nx: i32, ny: i32) {
+        if self.latency_ms > 0.0 {
+            self.pending = Some((self.clock + self.latency_ms, nx, ny));
+        } else {
+            self.move_to(nx, ny);
+        }
+    }
+
+    /// Where the view will be once pending input has arrived.
+    fn target(&self) -> (i32, i32) {
+        self.pending.map_or((self.x, self.y), |(_, x, y)| (x, y))
     }
 
     fn move_to(&mut self, nx: i32, ny: i32) {
@@ -80,6 +100,12 @@ impl ScrollDriver for FakeDriver {
     fn grab(&mut self) -> Result<Image, CaptureError> {
         self.grabs += 1;
         self.clock += 5.0;
+        if let Some((due, nx, ny)) = self.pending {
+            if self.clock >= due {
+                self.pending = None;
+                self.move_to(nx, ny);
+            }
+        }
         let (x, y) = self.anim.pop().unwrap_or((self.x, self.y));
         Ok(self.view_at(x, y))
     }
@@ -88,9 +114,10 @@ impl ScrollDriver for FakeDriver {
         if !self.wheel_works {
             return;
         }
+        let (x, y) = self.target();
         match axis {
-            Axis::Vertical => self.move_to(self.x, self.y + notches * self.ppn.1),
-            Axis::Horizontal => self.move_to(self.x + notches * self.ppn.0, self.y),
+            Axis::Vertical => self.scroll_to(x, y + notches * self.ppn.1),
+            Axis::Horizontal => self.scroll_to(x + notches * self.ppn.0, y),
         }
     }
     fn can_page(&self) -> bool {
@@ -102,9 +129,10 @@ impl ScrollDriver for FakeDriver {
             return;
         }
         let s = if forward { 1 } else { -1 };
+        let (x, y) = self.target();
         match axis {
-            Axis::Vertical => self.move_to(self.x, self.y + s * (self.view_h as i32 - 20)),
-            Axis::Horizontal => self.move_to(self.x + s * (self.view_w as i32 - 20), self.y),
+            Axis::Vertical => self.scroll_to(x, y + s * (self.view_h as i32 - 20)),
+            Axis::Horizontal => self.scroll_to(x + s * (self.view_w as i32 - 20), y),
         }
     }
     fn cancelled(&mut self) -> bool {
@@ -119,7 +147,7 @@ impl ScrollDriver for FakeDriver {
 }
 
 fn cfg(direction: ScrollDirection) -> LoopConfig {
-    let s = ScrollSettings { direction, max_screens: 60, step_delay_ms: 60 };
+    let s = ScrollSettings { direction, max_screens: 60, step_delay_ms: 60, start_at_top: false };
     LoopConfig::new(&s, 0)
 }
 
@@ -228,4 +256,97 @@ fn settle_waits_for_stable_frames() {
     let _ = run_loop(&mut d, &c).expect("capture");
     assert!(d.clock >= 60.0);
     assert!(d.grabs >= 8);
+}
+
+#[test]
+fn late_wheel_input_is_waited_for() {
+    // The capture in the field: the browser applied the first wheel notch ~150 ms late, the
+    // loop took that for "the wheel does nothing", switched to page scrolling, and the late
+    // notch plus a whole page left no overlap (two screens joined by a red separator).
+    let page = text_page(220, 2600, 131, &[(900, 120)]);
+    let mut d = FakeDriver::new(page.clone(), 220, 300);
+    d.page_works = true;
+    d.latency_ms = 150.0;
+    let out = run_loop(&mut d, &cfg(ScrollDirection::Vertical)).expect("capture");
+    assert_eq!(out, page);
+    assert_eq!(d.page_calls, 0, "the wheel works, page scrolling must not be used");
+}
+
+#[test]
+fn late_input_both_directions() {
+    let page = noise_page(700, 1000, 133);
+    let mut d = FakeDriver::new(page.clone(), 250, 300);
+    d.latency_ms = 120.0;
+    let out = run_loop(&mut d, &cfg(ScrollDirection::Both)).expect("capture");
+    assert_eq!(out, page);
+}
+
+#[test]
+fn starts_from_the_top_when_asked() {
+    let page = text_page(200, 2400, 135, &[]);
+    let mut d = FakeDriver::new(page.clone(), 200, 300);
+    d.y = 1500;
+    d.latency_ms = 100.0;
+    let mut c = cfg(ScrollDirection::Vertical);
+    c.start_at_top = true;
+    let out = run_loop(&mut d, &c).expect("capture");
+    assert_eq!(out, page);
+}
+
+#[test]
+fn starts_from_the_top_left_for_both() {
+    let page = noise_page(700, 900, 137);
+    let mut d = FakeDriver::new(page.clone(), 250, 300);
+    d.x = 300;
+    d.y = 400;
+    let mut c = cfg(ScrollDirection::Both);
+    c.start_at_top = true;
+    let out = run_loop(&mut d, &c).expect("capture");
+    assert_eq!(out, page);
+}
+
+#[test]
+fn a_blinking_caret_is_not_movement() {
+    let a = text_page(300, 400, 139, &[]);
+    let mut b = a.clone();
+    // A 2 px caret, 18 rows tall.
+    let mut caret = Image::new(2, 18);
+    caret.data.fill(7);
+    b.blit(&caret, 150, 100);
+    assert!(!moved(&a, &b, 0));
+    let shifted = {
+        let page = text_page(300, 600, 139, &[]);
+        (page.crop(Rect::new(0, 0, 300, 400)), page.crop(Rect::new(0, 40, 300, 400)))
+    };
+    assert!(moved(&shifted.0, &shifted.1, 0));
+}
+
+/// Live check on a real window: `SCROLL_LIVE_TITLE="Scroll Test Page" SCROLL_LIVE_OUT=out.png
+/// cargo test --bin SnapForge scroll_live -- --ignored`. Sends real wheel input.
+#[test]
+#[ignore]
+fn scroll_live() {
+    use windows::core::HSTRING;
+    use windows::Win32::Foundation::{POINT, RECT};
+    use windows::Win32::Graphics::Gdi::ClientToScreen;
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetClientRect, SetForegroundWindow};
+    let title = std::env::var("SCROLL_LIVE_TITLE").expect("SCROLL_LIVE_TITLE");
+    let out = std::env::var("SCROLL_LIVE_OUT").expect("SCROLL_LIVE_OUT");
+    let top = std::env::var("SCROLL_LIVE_TOP").map_or(true, |v| v != "0");
+    // SAFETY: plain window queries.
+    let (hwnd, rect) = unsafe {
+        let h = FindWindowW(None, &HSTRING::from(title.as_str())).expect("window");
+        let _ = SetForegroundWindow(h);
+        let mut rc = RECT::default();
+        GetClientRect(h, &mut rc).expect("client rect");
+        let mut p = POINT { x: 0, y: 0 };
+        let _ = ClientToScreen(h, &mut p);
+        (h, Rect::new(p.x, p.y, rc.right, rc.bottom))
+    };
+    let s = ScrollSettings { start_at_top: top, ..Default::default() };
+    let opts = GrabOptions { engine: crate::settings::CaptureEngine::default(), include_cursor: false };
+    let t0 = std::time::Instant::now();
+    let img = run(ScrollTarget { rect, hwnd: Some(hwnd.0 as isize) }, &s, &opts).expect("capture");
+    println!("{}x{} in {:?}", img.width, img.height, t0.elapsed());
+    crate::output::save::save_image(&img, std::path::Path::new(&out)).expect("save");
 }

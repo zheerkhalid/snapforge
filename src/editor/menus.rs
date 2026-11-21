@@ -100,6 +100,10 @@ pub fn build_registry(
         .when(c::can_redo));
     add(Command::new("edit.cut", t("editor-cut"), K::Edit, Action::Cut).key("Ctrl+X").icon("✂").when(c::has_selection));
     add(Command::new("edit.copy", t("editor-copy"), K::Edit, Action::Copy).key("Ctrl+C").icon("📋").when(c::has_doc));
+    add(Command::new("edit.copy_image", t("editor-copy-image"), K::Edit, Action::CopyImage)
+        .icon("📋")
+        .keywords("clipboard whole image")
+        .when(c::has_doc));
     add(Command::new("edit.paste", t("editor-paste"), K::Edit, Action::Paste).key("Ctrl+V").icon("📥"));
     add(Command::new("edit.paste_tab", t("editor-paste-new-tab"), K::Edit, Action::PasteNewTab)
         .key("Ctrl+Shift+V")
@@ -267,6 +271,31 @@ impl EditorApp {
     }
 
     /// One menu entry for a registered command.
+    /// Right-click menu on the image.
+    pub(super) fn canvas_menu(&mut self, ui: &mut egui::Ui) {
+        ui.set_min_width(220.0);
+        self.item(ui, "edit.copy_image");
+        if self.cmd_state.has_selection {
+            self.item(ui, "edit.copy");
+            self.item(ui, "edit.cut");
+        }
+        self.item(ui, "edit.paste");
+        ui.separator();
+        if self.cmd_state.has_selection {
+            self.item(ui, "edit.crop");
+            self.item(ui, "edit.deselect");
+        } else {
+            self.item(ui, "edit.select_all");
+        }
+        ui.separator();
+        self.item(ui, "file.save");
+        self.item(ui, "file.save_as");
+        self.item(ui, "edit.pin");
+        if self.cmd_state.has_path {
+            self.item(ui, "file.open_folder");
+        }
+    }
+
     fn item(&mut self, ui: &mut egui::Ui, id: &str) {
         let Some(cmd) = self.registry.get(id) else { return };
         if menu_entry(ui, cmd, &self.cmd_state) {

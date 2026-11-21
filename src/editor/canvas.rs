@@ -76,6 +76,8 @@ pub struct CanvasOutput {
     pub hover_px: Option<(i32, i32)>,
     /// Name of an edit to report (e.g. canvas resized) — for the toast / status.
     pub edited: Option<&'static str>,
+    /// The canvas widget's response (right-click menu).
+    pub response: egui::Response,
 }
 
 /// Pan, zoom and tool input, then paint.
@@ -86,7 +88,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, st: &mut CanvasState, cx: Can
     let view_px = [rect.width() * ppp, rect.height() * ppp];
     let img_px = doc.size();
     doc.view.layout(img_px, view_px);
-    let mut out = CanvasOutput { painted: false, hover_px: None, edited: None };
+    let mut out = CanvasOutput { painted: false, hover_px: None, edited: None, response: resp.clone() };
 
     // ---- zoom / scroll
     let alt = ctx.input(|i| i.modifiers.alt && !i.modifiers.ctrl && !i.modifiers.command);

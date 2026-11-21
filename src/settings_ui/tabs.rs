@@ -268,6 +268,7 @@ fn capture(ui: &mut Ui, s: &mut Session) {
                     },
                 )
             });
+            ui.checkbox(&mut c.scroll.start_at_top, t("settings-scroll-from-top"));
             row(ui, &t("settings-scroll-max"), |ui| {
                 ui.add(egui::DragValue::new(&mut c.scroll.max_screens).range(1..=500))
             });

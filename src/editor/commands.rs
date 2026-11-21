@@ -61,6 +61,8 @@ pub enum Action {
     UndoMany(usize),
     RedoMany(usize),
     Copy,
+    /// Copy the whole image (with annotations), ignoring any selection.
+    CopyImage,
     Cut,
     Paste,
     PasteNewTab,

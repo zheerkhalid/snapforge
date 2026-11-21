@@ -284,11 +284,13 @@ pub struct ScrollSettings {
     pub max_screens: u32,
     /// Minimum settle time after each scroll step.
     pub step_delay_ms: u32,
+    /// Scroll to the top (and left) before capturing, so the whole page is captured.
+    pub start_at_top: bool,
 }
 
 impl Default for ScrollSettings {
     fn default() -> Self {
-        Self { direction: ScrollDirection::Vertical, max_screens: 60, step_delay_ms: 60 }
+        Self { direction: ScrollDirection::Vertical, max_screens: 60, step_delay_ms: 60, start_at_top: true }
     }
 }
 

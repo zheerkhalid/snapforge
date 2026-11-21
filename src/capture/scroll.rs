@@ -11,16 +11,20 @@
 //! `GetAsyncKeyState`, indicator window) lives in `scroll_win.rs`, and the unit tests use a
 //! fake driver that serves a synthetic page.
 //!
-//! * Capture starts at the **current scroll position** (nothing is scrolled to the top
-//!   first): the user decides where the capture begins, and pages with lazy loading or
-//!   "scroll to top" side effects are not disturbed.
+//! * With `start_at_top` (the default) the view is first scrolled to the top (and, for
+//!   `Both`, the left) with large wheel bursts until it stops moving, so the whole page is
+//!   captured. Without it, capture starts at the current scroll position.
 //! * Each step is adaptive: the first step sends one wheel notch and measures how many
 //!   pixels it moved; later steps send enough notches to move about 75 % of the scrolling
 //!   part of the frame (sticky header and footer excluded). If the wheel never moves
 //!   anything and the target window is known, the loop falls back to
 //!   `WM_VSCROLL`/`WM_HSCROLL` `SB_PAGEDOWN`/`SB_PAGERIGHT`.
 //! * After every step the loop waits for the screen to settle: at least `step_delay_ms`,
-//!   then re-grabs until two consecutive grabs are identical (or a timeout passes).
+//!   then until the content has started to move (many apps, browsers especially, apply
+//!   wheel input a frame or more late, and smooth scrolling starts after that), then until
+//!   it has stopped moving (several identical grabs in a row). Deciding too early made a
+//!   late scroll look like "the wheel does nothing", and the next step then jumped a whole
+//!   screen, leaving no overlap to stitch.
 //! * It stops when the content did not move twice in a row (end reached), at
 //!   `max_screens` frames, after three mismatches in a row, or when the user presses Esc or
 //!   clicks. A stop by the user keeps what was captured; only if nothing beyond the first
@@ -92,6 +96,12 @@ pub struct LoopConfig {
     pub settle_poll_ms: u32,
     /// Give up waiting for a stable screen after this long (then use the last grab).
     pub settle_timeout_ms: u32,
+    /// After a scroll step, wait this long at most for the content to start moving.
+    pub move_timeout_ms: u32,
+    /// Consecutive identical grabs (after the first) that count as "at rest".
+    pub stable_grabs: u32,
+    /// Scroll to the start of the page first.
+    pub start_at_top: bool,
     /// Fraction of the scrolling extent to move per step.
     pub step_fraction: f64,
     pub max_notches: i32,
@@ -106,8 +116,11 @@ impl LoopConfig {
             direction: s.direction,
             max_screens: s.max_screens.max(1),
             step_delay_ms: s.step_delay_ms,
-            settle_poll_ms: 25,
-            settle_timeout_ms: 1500,
+            settle_poll_ms: 30,
+            settle_timeout_ms: 2500,
+            move_timeout_ms: 800,
+            stable_grabs: 2,
+            start_at_top: s.start_at_top,
             step_fraction: 0.75,
             max_notches: 60,
             max_mismatches: 3,
@@ -120,6 +133,19 @@ impl LoopConfig {
 pub fn run_loop<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig) -> Result<Image, CaptureError> {
     if d.cancelled() {
         return Err(CaptureError::Cancelled);
+    }
+    if cfg.start_at_top {
+        match cfg.direction {
+            ScrollDirection::Vertical => to_start(d, cfg, Axis::Vertical)?,
+            ScrollDirection::Horizontal => to_start(d, cfg, Axis::Horizontal)?,
+            ScrollDirection::Both => {
+                to_start(d, cfg, Axis::Vertical)?;
+                to_start(d, cfg, Axis::Horizontal)?;
+            }
+        }
+        if d.cancelled() {
+            return Err(CaptureError::Cancelled);
+        }
     }
     let first = match settle(d, cfg, 0)? {
         Some(f) => f,
@@ -141,14 +167,39 @@ pub fn run_loop<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig) -> Result<Image, C
     }
 }
 
-/// Grab until two consecutive grabs are identical (or the timeout passes), after waiting
-/// at least `min_delay` ms. `None` when cancelled meanwhile.
+/// Grab until the screen is at rest, after waiting at least `min_delay` ms. `None` when
+/// cancelled meanwhile.
 fn settle<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, min_delay: u32) -> Result<Option<Image>, CaptureError> {
     if min_delay > 0 {
         d.sleep_ms(min_delay);
     }
+    let first = d.grab()?;
+    rest(d, cfg, first)
+}
+
+/// After a scroll step: wait at least `step_delay_ms`, then until the content has moved away
+/// from `before` (or `move_timeout_ms` passed), then until it is at rest.
+fn settle_after<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, before: &Image) -> Result<Option<Image>, CaptureError> {
+    d.sleep_ms(cfg.step_delay_ms);
     let start = d.now_ms();
-    let mut a = d.grab()?;
+    let mut cur = d.grab()?;
+    while !moved(before, &cur, cfg.stitch.ignore_margin) {
+        if d.cancelled() {
+            return Ok(None);
+        }
+        if d.now_ms() - start >= cfg.move_timeout_ms as f64 {
+            return Ok(Some(cur));
+        }
+        d.sleep_ms(cfg.settle_poll_ms);
+        cur = d.grab()?;
+    }
+    rest(d, cfg, cur)
+}
+
+/// Re-grab until `stable_grabs` grabs in a row equal the one before (or the timeout passes).
+fn rest<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, mut a: Image) -> Result<Option<Image>, CaptureError> {
+    let start = d.now_ms();
+    let mut same = 0;
     loop {
         if d.cancelled() {
             return Ok(None);
@@ -156,7 +207,12 @@ fn settle<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, min_delay: u32) -> Resul
         d.sleep_ms(cfg.settle_poll_ms);
         let b = d.grab()?;
         if a == b {
-            return Ok(Some(b));
+            same += 1;
+            if same >= cfg.stable_grabs.max(1) {
+                return Ok(Some(b));
+            }
+        } else {
+            same = 0;
         }
         if d.now_ms() - start >= cfg.settle_timeout_ms as f64 {
             log::debug!("scroll: screen did not settle, using the last grab");
@@ -164,6 +220,48 @@ fn settle<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, min_delay: u32) -> Resul
         }
         a = b;
     }
+}
+
+/// Whether the content moved between two grabs: more than a few rows differ, so a blinking
+/// caret or a small hover effect does not count. Columns within `margin` of the left and
+/// right edges (the scrollbar) are left out. A mostly blank page may not reach the
+/// threshold; that only costs the move timeout, the stitcher still decides what moved.
+pub(crate) fn moved(a: &Image, b: &Image, margin: u32) -> bool {
+    if a.width != b.width || a.height != b.height {
+        return true;
+    }
+    let (w, h) = (a.width as usize, a.height as usize);
+    if w == 0 || h == 0 {
+        return false;
+    }
+    let m = (margin as usize).min(w / 4);
+    let row = w * 4;
+    let changed = (0..h)
+        .filter(|&y| {
+            let r = y * row + m * 4..(y + 1) * row - m * 4;
+            a.data[r.clone()] != b.data[r]
+        })
+        .count();
+    changed * 100 > h * 6 || changed >= 120
+}
+
+/// Scroll to the start of `axis` (top or left) with large wheel bursts until the view stops
+/// moving. Views that the wheel does not scroll are left where they are.
+fn to_start<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, axis: Axis) -> Result<(), CaptureError> {
+    let mut before = d.grab()?;
+    for _ in 0..40 {
+        if d.cancelled() {
+            return Ok(());
+        }
+        d.wheel(axis, -cfg.max_notches);
+        let Some(after) = settle_after(d, cfg, &before)? else { return Ok(()) };
+        if !moved(&before, &after, cfg.stitch.ignore_margin) {
+            log::debug!("scroll {axis:?}: at the start");
+            return Ok(());
+        }
+        before = after;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,6 +379,7 @@ struct AxisRun {
 fn capture_axis<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, axis: Axis, first: Image, max_frames: u32) -> AxisRun {
     let mut st = Stitcher::with_options(axis, cfg.stitch);
     st.push(&first);
+    let mut before = first;
     let mut stepper = Stepper::new(axis);
     let (mut added, mut cancelled, mut mismatches) = (0u64, false, 0u32);
     while st.frames() < max_frames {
@@ -290,7 +389,7 @@ fn capture_axis<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, axis: Axis, first:
         }
         let extent = st.scrolling_extent().unwrap_or(0);
         let hint = stepper.step(d, cfg, extent);
-        let frame = match settle(d, cfg, cfg.step_delay_ms) {
+        let frame = match settle_after(d, cfg, &before) {
             Ok(Some(f)) => f,
             Ok(None) => {
                 cancelled = true;
@@ -302,6 +401,7 @@ fn capture_axis<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, axis: Axis, first:
             }
         };
         let r = st.push_hint(&frame, hint);
+        before = frame;
         log::debug!("scroll {axis:?}: {r:?} (hint {hint:?}, extent {})", st.extent());
         if let PushResult::Added(px) = r {
             added += px as u64;
@@ -341,6 +441,14 @@ fn run_both<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, first: Image) -> Resul
             break;
         }
         col.stepper.undo(d, cfg);
+        // Back at the column's top: let the scroll-back finish before stepping right.
+        let mut before = match settle(d, cfg, cfg.step_delay_ms)? {
+            Some(f) => f,
+            None => {
+                cancelled = true;
+                break;
+            }
+        };
         let mut next = None;
         while next.is_none() {
             if d.cancelled() {
@@ -348,7 +456,7 @@ fn run_both<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, first: Image) -> Resul
                 break;
             }
             let hint = h.step(d, cfg, tops.scrolling_extent().unwrap_or(0));
-            let frame = match settle(d, cfg, cfg.step_delay_ms) {
+            let frame = match settle_after(d, cfg, &before) {
                 Ok(Some(f)) => f,
                 Ok(None) => {
                     cancelled = true;
@@ -360,6 +468,7 @@ fn run_both<D: ScrollDriver>(d: &mut D, cfg: &LoopConfig, first: Image) -> Resul
                 }
             };
             let r = tops.push_hint(&frame, hint);
+            before = frame.clone();
             log::debug!("scroll both, next column: {r:?}");
             let end = h.observe(d, r, hint);
             match r {
