@@ -162,11 +162,11 @@ The **Share-ready** group on the editor toolbar holds three tools for pictures y
 
 SnapForge keeps your most recent captures so you can get one back, even if it only went to the clipboard.
 
-- Open it from the tray menu (**Capture History…**) or from the editor's Tools menu.
+- Open it from the tray menu (**Capture History…**), from the editor's Tools menu, or with `Ctrl+H` in the editor (the same key closes it).
 - Type in the search box to filter by date, size, capture type, file name, or words that appear in the picture (the text is read in the background while the window is open).
-- Click a capture to open it in the editor. Right-click for **Copy**, **Show in folder** and **Remove from history**.
+- Click a capture (or press `Enter` in the search box) to open it in the editor; hold `Ctrl` to keep the history window open. Right-click for **Copy to clipboard**, **Show in folder** and **Remove from history**.
 - Captures that were saved to a file (Auto-Save or the File destination) are listed from where they are; SnapForge never deletes your files. Other captures are kept as PNG files in the `history` folder inside the settings folder, and the oldest are removed when the limit is reached.
-- **Settings ▸ History** sets how many captures are kept (50 by default), whether their text is read, and turns the history off. **Clear history** removes the list and the copies SnapForge made.
+- **Settings ▸ Capture History** sets how many captures are kept (50 by default), whether their text is read, and turns the history off. **Clear history** removes the list and the copies SnapForge made.
 
 ## Screen recorder
 

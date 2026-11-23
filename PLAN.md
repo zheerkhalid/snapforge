@@ -50,7 +50,7 @@ docs/USAGE.md
 | windows-core | 0.58 | `#[implement]` for COM callbacks (already in the tree) | 0 |
 | rqrr | 0.10 (no `img` feature) | QR code reading in Capture Text and the editor | ~0.1 MB |
 
-Not needed in the end: `mp3lame-encoder` (Windows' built-in MP3 encoder MFT is used), `gifski` (GPL licensing and about 1 MB), and `cosmic-text` (DirectWrite renders text instead, adding nothing to the binary). The final release EXE is **11.5 MB**.
+Not needed in the end: `mp3lame-encoder` (Windows' built-in MP3 encoder MFT is used), `gifski` (GPL licensing and about 1 MB), and `cosmic-text` (DirectWrite renders text instead, adding nothing to the binary). The release EXE is **12.0 MB**.
 
 ## Milestones
 

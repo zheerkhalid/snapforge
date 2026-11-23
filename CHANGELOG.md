@@ -22,13 +22,13 @@ All notable changes to SnapForge are listed here. The format follows
 - **Capture Text also reads QR codes**: when the captured area contains a QR code, its
   content appears above the recognized text. This works even when no OCR language is
   installed.
-- **Capture History** (Tools menu, tray menu): the most recent captures are kept and can
+- **Capture History** (Tools menu, tray menu, or `Ctrl+H` in the editor): the most recent captures are kept and can
   be found again, including captures that only went to the clipboard. Search by date,
   size, capture type, file name or by words that appear in the picture. Open a capture
   in the editor, copy it, show it in its folder or remove it. The number of captures kept
-  (50 by default) and an off switch are in Settings ▸ History.
-- **Right-to-left file names**: Kurdish, Arabic, Persian and Hebrew file names are drawn
-  correctly (joined letters, right order) in Capture History.
+  (50 by default) and an off switch are in Settings ▸ Capture History.
+- **Right-to-left names**: Kurdish, Arabic, Persian and Hebrew file names are drawn
+  correctly (joined letters, right order) on the editor's tabs and in Capture History.
 - A **Share-ready** group on the editor toolbar with Beautify, Hide Private Details and
   Read QR Code.
 - `CHANGELOG.md` (this file).

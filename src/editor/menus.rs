@@ -769,7 +769,14 @@ impl EditorApp {
         let galley = ui.painter().layout_no_wrap(shown, font, text_color);
         let (pad, close, h) = (12.0, 18.0, 32.0);
         let dot_w = if dirty { 12.0 } else { 0.0 };
-        let w = pad + galley.size().x + dot_w + 8.0 + close + pad * 0.6;
+        // egui cannot shape right-to-left scripts (Kurdish, Arabic, Hebrew…): such titles
+        // are drawn by Windows instead.
+        let native_w = super::bidi::needs_native(title)
+            .then(|| super::bidi::measure(ui, title, 13.5, false))
+            .flatten()
+            .map(|s| s.x.min(260.0));
+        let title_w = native_w.unwrap_or(galley.size().x);
+        let w = pad + title_w + dot_w + 8.0 + close + pad * 0.6;
         let (rect, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
         let close_rect = egui::Rect::from_center_size(
             egui::pos2(rect.right() - pad * 0.6 - close / 2.0, rect.center().y),
@@ -795,8 +802,11 @@ impl EditorApp {
             p.rect_filled(bar, CornerRadius::same(2), style::ACCENT);
         }
         let text_pos = egui::pos2(rect.left() + pad, rect.center().y - galley.size().y / 2.0);
-        let text_w = galley.size().x;
-        p.galley(text_pos, galley, text_color);
+        let text_w = title_w;
+        let title_rect = egui::Rect::from_min_size(egui::pos2(text_pos.x, rect.top()), vec2(title_w, h));
+        if native_w.is_none() || super::bidi::paint(ui, title_rect, title, 13.5, false, text_color, false).is_none() {
+            p.galley(text_pos, galley, text_color);
+        }
         if dirty {
             p.circle_filled(egui::pos2(text_pos.x + text_w + 8.0, rect.center().y), 3.5, pal.dirty);
         }

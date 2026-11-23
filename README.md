@@ -7,20 +7,20 @@
 ### Capture, annotate and record your screen. Fast, native, and free.
 
 A lightweight Windows screen capture, annotation and recording tool written in **Rust**.
-It ships as a single 11.5 MB EXE with no runtimes, no account, no cloud and no telemetry.
+It ships as a single 12 MB EXE with no runtimes, no account, no cloud and no telemetry.
 
 <p>
   <img alt="Platform" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows11&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-B7410E?style=for-the-badge&logo=rust&logoColor=white" />
   <img alt="License" src="https://img.shields.io/badge/License-MIT-7B3FE4?style=for-the-badge" />
-  <img alt="EXE size" src="https://img.shields.io/badge/EXE-11.5%20MB-2EA043?style=for-the-badge" />
+  <img alt="EXE size" src="https://img.shields.io/badge/EXE-12%20MB-2EA043?style=for-the-badge" />
 </p>
 
 <p>
   <img alt="No telemetry" src="https://img.shields.io/badge/telemetry-none-2EA043?style=flat-square&logo=shield&logoColor=white" />
   <img alt="Single EXE" src="https://img.shields.io/badge/single%20EXE-no%20runtimes-2EA043?style=flat-square&logo=files&logoColor=white" />
   <img alt="Per-monitor DPI" src="https://img.shields.io/badge/DPI-PerMonitorV2-4F6BFF?style=flat-square" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-440%2B%20passing-2EA043?style=flat-square" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-535%2B%20passing-2EA043?style=flat-square" />
   <img alt="Made by Zheer Khalid" src="https://img.shields.io/badge/made%20by-Zheer%20Khalid-9B3CF0?style=flat-square" />
 </p>
 
@@ -126,7 +126,7 @@ These numbers were measured with `SnapForge.exe --bench` on a release build (i7-
 | Idle RAM in the tray | < 30 MB | ✅ **17 MB** working set |
 | Hotkey → capture overlay visible | < 80 ms | ✅ **36 ms** |
 | Capture → editor showing the image | < 150 ms | ✅ **31 ms** (first open 327 ms, which includes OpenGL start-up) |
-| Portable EXE size | < 20 MB | ✅ **11.5 MB** |
+| Portable EXE size | < 20 MB | ✅ **12.0 MB** |
 | 1080p60 recording, hardware encoder | < 10 % CPU, no drops | ✅ **1.3 % of total CPU, 0 of 330 frames dropped** |
 | 20-screen scrolling stitch | < 5 s | ✅ **90 ms** of stitching (plus scroll settle time) |
 | A/V sync after 10 s of recording | < 40 ms drift | ✅ **14.7 ms** |
