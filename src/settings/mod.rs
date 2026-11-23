@@ -5,6 +5,7 @@
 pub mod draw;
 pub mod editor_ext;
 pub mod filename;
+pub mod history;
 pub mod import_export;
 pub mod ocr;
 pub mod pin;
@@ -588,6 +589,7 @@ pub struct Settings {
     pub ocr: ocr::OcrSettings,
     pub tools: tools::ToolsSettings,
     pub print: print::PrintSettings,
+    pub history: history::HistorySettings,
 }
 
 impl Settings {

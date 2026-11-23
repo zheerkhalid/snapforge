@@ -800,6 +800,9 @@ fn deliver(o: CaptureOutcome) {
         path
     });
     if s.output.preview_in_editor && !explicit && !matches!(dest, Destination::Editor | Destination::Draw) {
+        if let Some(job) = history_job(&s, &image, o.mode, auto_saved.clone()) {
+            io(job);
+        }
         editor::open_image(image, capture_title(), auto_saved, Some(dest));
         // A standalone command-line run now has an editor window: keep running properly.
         if with_state(|st| st.exit_after_output) {
@@ -808,9 +811,32 @@ fn deliver(o: CaptureOutcome) {
         return;
     }
     let exit_after = with_state(|st| st.exit_after_output);
+    // The File destination's path is chosen here so the capture history can point at that file.
+    let out_path = if dest == Destination::File { Some(o.out_path.unwrap_or_else(output_path)) } else { o.out_path };
+    let saved = if dest == Destination::File { out_path.clone() } else { auto_saved.clone() };
+    let history = history_job(&s, &image, o.mode, saved);
     // The editor tab is tied to the auto-saved file, so Save updates that file.
-    let path = if dest == Destination::Editor { o.out_path.or(auto_saved) } else { o.out_path };
+    let path = if dest == Destination::Editor { out_path.or(auto_saved) } else { out_path };
     deliver_to(image, dest, path, exit_after);
+    // Queued after the save jobs above, so a linked file exists when the history looks at it.
+    if let Some(job) = history {
+        io(job);
+    }
+}
+
+/// The I/O job that adds a delivered capture to the capture history (`None` when the
+/// history is off). `saved` = the file the capture is being written to: it is linked, not copied.
+fn history_job(
+    s: &settings::Settings,
+    image: &Image,
+    mode: CaptureMode,
+    saved: Option<PathBuf>,
+) -> Option<impl FnOnce() + Send + 'static> {
+    if !s.history.enabled || image.is_empty() {
+        return None;
+    }
+    let image = image.clone();
+    Some(move || crate::caplog::record(&image, mode.id(), saved.as_deref()))
 }
 
 fn capture_title() -> String {

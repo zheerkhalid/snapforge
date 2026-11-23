@@ -213,6 +213,10 @@ pub fn build_registry(
     add(Command::new("tools.schedule_recording", t("menu-record-schedule"), K::Tools, Action::ScheduleRecording)
         .icon("⏰")
         .keywords("record timer"));
+    add(Command::new("tools.history", t("editor-tool-history"), K::Tools, Action::History)
+        .key("Ctrl+H")
+        .icon("🕘")
+        .keywords("captures recent previous search find clipboard"));
     add(Command::new("tools.settings", t("editor-settings"), K::Tools, Action::Settings)
         .key("Ctrl+,")
         .icon("⚙")
@@ -533,6 +537,7 @@ impl EditorApp {
             self.item(ui, id);
         }
         ui.separator();
+        self.item(ui, "tools.history");
         self.item(ui, "tools.palette");
     }
 

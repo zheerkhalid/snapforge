@@ -85,6 +85,7 @@ pub enum Action {
     /// Find e-mail addresses, phone numbers and card numbers and cover them.
     HidePrivate,
     ReadQr,
+    History,
     Palette,
     // view
     Zoom(ZoomCmd),

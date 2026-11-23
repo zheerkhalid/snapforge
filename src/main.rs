@@ -5,6 +5,7 @@
 
 mod app;
 mod bench;
+mod caplog;
 mod capture;
 mod cli;
 mod common;

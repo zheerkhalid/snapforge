@@ -37,6 +37,7 @@
 
 mod annot;
 mod app;
+mod bidi;
 mod canvas;
 mod commands;
 pub(crate) mod dialogs;
@@ -47,6 +48,7 @@ mod fileops;
 mod fx_install;
 mod fx_session;
 mod history;
+mod history_win;
 #[cfg(test)]
 mod integration_tests;
 mod jobs;
@@ -183,6 +185,8 @@ pub(crate) enum EditorMsg {
     OpenVideo(Option<PathBuf>),
     /// Convert to MP4 or Schedule Recording.
     OpenMedia(media_tools::MediaKind),
+    /// The Capture History window (inside the editor window).
+    OpenHistory,
 }
 
 /// Built-in registrations (effects, draw tools, clone stamp, tools host), once per process.
@@ -369,6 +373,12 @@ pub fn open_images_to_pdf() {
 pub fn open_batch_print() {
     START_HIDDEN.store(false, Ordering::Release);
     send(EditorMsg::OpenTool(tools_dialogs::ToolKind::BatchPrint, None), true);
+}
+
+/// Tools ▸ Capture History from outside the editor (tray).
+pub fn open_history() {
+    START_HIDDEN.store(false, Ordering::Release);
+    send(EditorMsg::OpenHistory, true);
 }
 
 /// Open the video editor, optionally with a video or `.sfvid` project. It is its own

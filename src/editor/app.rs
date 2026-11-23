@@ -152,6 +152,8 @@ pub struct EditorApp {
     video_icon_done: bool,
     /// Convert to MP4 and Schedule Recording (their own viewports).
     media: MediaTools,
+    /// Tools ▸ Capture History.
+    history_win: super::history_win::HistoryWindow,
     /// Started hidden: keep hiding for these first frames (eframe shows after frame 1).
     hide_frames: u8,
 }
@@ -223,6 +225,7 @@ impl EditorApp {
             video: VideoEditorWindow::new(),
             video_icon_done: false,
             media: MediaTools::new(),
+            history_win: super::history_win::HistoryWindow::new(),
             hide_frames: 0,
         };
         if super::start_hidden() {
@@ -349,6 +352,10 @@ impl EditorApp {
                 }
                 EditorMsg::OpenFiles(paths) => {
                     self.open_paths(paths);
+                    show = true;
+                }
+                EditorMsg::OpenHistory => {
+                    self.history_win.open(ctx);
                     show = true;
                 }
                 EditorMsg::Show => show = true,
@@ -1028,6 +1035,7 @@ impl EditorApp {
             }
             Action::ConvertToMp4 => self.media.open(super::media_tools::MediaKind::Convert),
             Action::ScheduleRecording => self.media.open(super::media_tools::MediaKind::Schedule),
+            Action::History => self.history_win.toggle(ctx),
             Action::SaveProject => {
                 if let Some(id) = active {
                     self.save_project(id, true);
@@ -1756,6 +1764,12 @@ impl EditorApp {
                     self.push_doc(Document::new(id, image, title, None, None), None);
                 }
                 ToolsEvent::Toast { text, error } => self.toast(text, error),
+            }
+        }
+        for ev in self.history_win.ui(ctx, &self.pal) {
+            match ev {
+                super::history_win::HistoryEvent::Open(path) => self.open_paths(vec![path]),
+                super::history_win::HistoryEvent::Toast { text, error } => self.toast(text, error),
             }
         }
         let Some(fx) = self.fx.as_mut() else { return };
