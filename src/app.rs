@@ -69,6 +69,7 @@ pub enum ToolWindow {
     BatchPrint,
     ConvertToMp4,
     ScheduleRecording,
+    History,
 }
 
 pub enum AppCommand {

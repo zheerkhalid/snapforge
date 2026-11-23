@@ -82,6 +82,7 @@ pub enum Action {
     VideoEditor,
     ConvertToMp4,
     ScheduleRecording,
+    History,
     Palette,
     // view
     Zoom(ZoomCmd),

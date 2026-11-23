@@ -61,6 +61,7 @@ const EXTRA: &[ExtraItem] = &[
     ("menu-combine", || AppCommand::OpenTool(ToolWindow::CombineImages), 1),
     ("menu-to-pdf", || AppCommand::OpenTool(ToolWindow::ImagesToPdf), 1),
     ("menu-batch-print", || AppCommand::OpenTool(ToolWindow::BatchPrint), 1),
+    ("menu-history", || AppCommand::OpenTool(ToolWindow::History), 1),
 ];
 
 fn build_extra(group: u8) -> Option<Menu> {

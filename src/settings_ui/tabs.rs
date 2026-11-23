@@ -32,6 +32,7 @@ pub fn show(ui: &mut Ui, s: &mut Session) {
         Tab::Ocr => generic_tab(ui, s.palette, "ocr", &mut s.copy.ocr),
         Tab::Tools => generic_tab(ui, s.palette, "tools", &mut s.copy.tools),
         Tab::Print => generic_tab(ui, s.palette, "print", &mut s.copy.print),
+        Tab::History => generic_tab(ui, s.palette, "history", &mut s.copy.history),
         Tab::Language => language(ui, s),
         Tab::About => about(ui, s),
     }

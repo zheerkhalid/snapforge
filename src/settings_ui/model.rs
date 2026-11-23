@@ -26,12 +26,13 @@ pub enum Tab {
     Ocr,
     Tools,
     Print,
+    History,
     Language,
     About,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 16] = [
+    pub const ALL: [Tab; 17] = [
         Tab::General,
         Tab::Capture,
         Tab::Output,
@@ -46,6 +47,7 @@ impl Tab {
         Tab::Ocr,
         Tab::Tools,
         Tab::Print,
+        Tab::History,
         Tab::Language,
         Tab::About,
     ];
@@ -67,6 +69,7 @@ impl Tab {
             Tab::Ocr => "ocr",
             Tab::Tools => "tools",
             Tab::Print => "print",
+            Tab::History => "history",
             Tab::Language => "language",
             Tab::About => "about",
         }
@@ -93,6 +96,7 @@ impl Tab {
             Tab::Ocr => "settings-tab-ocr",
             Tab::Tools => "settings-tab-tools",
             Tab::Print => "settings-tab-print",
+            Tab::History => "settings-tab-history",
             Tab::Language => "settings-tab-language",
             Tab::About => "settings-tab-about",
         }
@@ -180,6 +184,7 @@ pub fn reset_tab(tab: Tab, s: &mut Settings) {
         Tab::Ocr => s.ocr = Default::default(),
         Tab::Tools => s.tools = Default::default(),
         Tab::Print => s.print = Default::default(),
+        Tab::History => s.history = Default::default(),
         Tab::Language => s.general.language = settings::General::default().language,
         Tab::About => {}
     }
