@@ -24,14 +24,14 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, SetFocus, VK_CONT
 use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetParent, GetWindowLongPtrW, GetWindowRect,
-    GetWindowTextLengthW, GetWindowTextW, LoadCursorW, LoadIconW, PostMessageW, RegisterClassW, SendMessageW,
-    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, BM_GETCHECK, BM_SETCHECK,
-    BN_CLICKED, BS_AUTOCHECKBOX, BS_DEFPUSHBUTTON, BS_PUSHBUTTON, CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING,
-    CB_GETCURSEL, CB_RESETCONTENT, CB_SETCURSEL, ES_AUTOVSCROLL, ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN,
-    GWLP_USERDATA, HMENU, IDC_ARROW, MINMAXINFO, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_APP, WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLORSTATIC, WM_DPICHANGED, WM_GETMINMAXINFO,
-    WM_KEYDOWN, WM_NCDESTROY, WM_SETFONT, WM_SIZE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_EX_CLIENTEDGE,
-    WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    GetWindowTextLengthW, GetWindowTextW, IsIconic, IsZoomed, LoadCursorW, LoadIconW, PostMessageW, RegisterClassW,
+    SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, BM_GETCHECK,
+    BM_SETCHECK, BN_CLICKED, BS_AUTOCHECKBOX, BS_DEFPUSHBUTTON, BS_PUSHBUTTON, CBN_SELCHANGE, CBS_DROPDOWNLIST,
+    CB_ADDSTRING, CB_GETCURSEL, CB_RESETCONTENT, CB_SETCURSEL, ES_AUTOVSCROLL, ES_MULTILINE, ES_NOHIDESEL,
+    ES_WANTRETURN, GWLP_USERDATA, HMENU, IDC_ARROW, MINMAXINFO, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_APP, WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLORSTATIC, WM_DPICHANGED,
+    WM_GETMINMAXINFO, WM_KEYDOWN, WM_NCDESTROY, WM_SETFONT, WM_SIZE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN,
+    WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 const CLASS: &str = "SnapForge.OcrResult";
@@ -50,6 +50,8 @@ struct Done {
     result: Result<OcrResult, String>,
     no_language: bool,
     langs: Option<Vec<(String, String)>>,
+    /// QR codes in the capture (decoded next to the text recognition).
+    codes: Vec<crate::qr::Code>,
 }
 
 type Slot = Arc<Mutex<Option<Done>>>;
@@ -81,6 +83,7 @@ struct OcrWin {
     dpi: u32,
     img: Arc<Image>,
     result: Option<OcrResult>,
+    codes: Vec<crate::qr::Code>,
     langs: Vec<(String, String)>,
     slot: Slot,
     generation: u64,
@@ -285,6 +288,7 @@ pub fn open(img: Image) {
         dpi,
         img: Arc::new(img),
         result: None,
+        codes: Vec::new(),
         langs: Vec::new(),
         slot,
         generation: 1,
@@ -382,8 +386,9 @@ fn start(hwnd: HWND, lang: String, want_langs: bool) {
         super::engine::ensure_com();
         let langs = if want_langs { Some(super::languages()) } else { None };
         let res = super::recognize(&img, Some(&lang));
+        let codes = crate::qr::decode(&img);
         let no_language = matches!(&res, Err(e) if matches!(e.downcast_ref::<OcrError>(), Some(OcrError::NoLanguage)));
-        let done = Done { generation, result: res.map_err(|e| format!("{e:#}")), no_language, langs };
+        let done = Done { generation, result: res.map_err(|e| format!("{e:#}")), no_language, langs, codes };
         if let Ok(mut g) = slot.lock() {
             *g = Some(done);
         }
@@ -414,6 +419,7 @@ fn on_done(hwnd: HWND) {
         if done.generation != w.generation {
             return None;
         }
+        w.codes = done.codes;
         if let Some(langs) = done.langs {
             w.langs = langs;
             // SAFETY: filling our own combo box with NUL-terminated strings.
@@ -437,15 +443,24 @@ fn on_done(hwnd: HWND) {
                         LPARAM(0),
                     );
                 }
-                let text = r.text(keep_checked(w));
+                let text = super::text_with_codes(&r, &w.codes, keep_checked(w));
                 set_text(w.edit, &to_crlf(&text));
-                let status = if r.word_count() == 0 {
-                    t("ocr-status-none")
-                } else {
-                    tf(
-                        "ocr-status-done",
-                        &[("lines", &r.lines.len().to_string()), ("words", &r.word_count().to_string())],
-                    )
+                let r = super::without_codes(&r, &w.codes);
+                let qr = tf("ocr-status-qr", &[("n", &w.codes.len().to_string())]);
+                let status = match (r.word_count(), w.codes.len()) {
+                    (0, 0) => t("ocr-status-none"),
+                    (0, _) => qr,
+                    (words, codes) => {
+                        let done = tf(
+                            "ocr-status-done",
+                            &[("lines", &r.lines.len().to_string()), ("words", &words.to_string())],
+                        );
+                        if codes == 0 {
+                            done
+                        } else {
+                            format!("{done} · {qr}")
+                        }
+                    }
                 };
                 set_text(w.status, &status);
                 w.result = Some(r);
@@ -456,11 +471,28 @@ fn on_done(hwnd: HWND) {
                 }
                 (first && auto_copy && !text.is_empty()).then_some((text, w.status))
             }
+            Err(e) if !w.codes.is_empty() => {
+                // No recognizer language (or OCR failed), but a QR code needs none.
+                log::warn!("ocr: {e}");
+                let text = crate::qr::texts(&w.codes).join("\n");
+                set_text(w.edit, &to_crlf(&text));
+                set_text(w.status, &tf("ocr-status-qr", &[("n", &w.codes.len().to_string())]));
+                let first = std::mem::replace(&mut w.first_result, false);
+                // SAFETY: focusing our own edit control (so Esc closes the window).
+                unsafe {
+                    let _ = SetFocus(w.edit);
+                }
+                (first && auto_copy).then_some((text, w.status))
+            }
             Err(e) => {
                 let msg = if done.no_language { t("ocr-no-language") } else { tf("notify-error", &[("error", &e)]) };
                 log::warn!("ocr: {e}");
                 set_text(w.status, &t("ocr-status-failed"));
                 set_text(w.edit, &msg);
+                // SAFETY: focusing our own edit control (so Esc closes the window).
+                unsafe {
+                    let _ = SetFocus(w.edit);
+                }
                 None
             }
         }
@@ -520,7 +552,7 @@ fn on_command(hwnd: HWND, id: u16, code: u32) {
             let keep = with(hwnd, |w| {
                 let keep = keep_checked(w);
                 if let Some(r) = &w.result {
-                    set_text(w.edit, &to_crlf(&r.text(keep)));
+                    set_text(w.edit, &to_crlf(&super::text_with_codes(r, &w.codes, keep)));
                 }
                 keep
             });
@@ -537,6 +569,20 @@ fn on_command(hwnd: HWND, id: u16, code: u32) {
             }
         }
         _ => {}
+    }
+    // Esc and Ctrl+A are handled by the text box: after a click on a button or the
+    // check box, give it the keyboard back (otherwise Esc would do nothing).
+    if matches!(id, ID_KEEP | ID_COPY_ALL | ID_COPY_SEL) && code == BN_CLICKED {
+        focus_text(hwnd);
+    }
+}
+
+fn focus_text(hwnd: HWND) {
+    if let Some(edit) = with(hwnd, |w| w.edit) {
+        // SAFETY: focusing our own edit control.
+        unsafe {
+            let _ = SetFocus(edit);
+        }
     }
 }
 
@@ -594,10 +640,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             return LRESULT(0);
         }
         WM_CLOSE => {
-            let mut r = RECT::default();
-            let _ = GetWindowRect(hwnd, &mut r);
-            let rr = win::rect_from_win(&r);
-            settings::update(|s| s.ocr.window = Some([rr.x, rr.y, rr.w, rr.h]));
+            // A maximized or minimized window has no size worth remembering.
+            if !IsZoomed(hwnd).as_bool() && !IsIconic(hwnd).as_bool() {
+                let mut r = RECT::default();
+                let _ = GetWindowRect(hwnd, &mut r);
+                let rr = win::rect_from_win(&r);
+                settings::update(|s| s.ocr.window = Some([rr.x, rr.y, rr.w, rr.h]));
+            }
             let _ = DestroyWindow(hwnd);
             return LRESULT(0);
         }

@@ -82,6 +82,9 @@ pub enum Action {
     VideoEditor,
     ConvertToMp4,
     ScheduleRecording,
+    /// Find e-mail addresses, phone numbers and card numbers and cover them.
+    HidePrivate,
+    ReadQr,
     Palette,
     // view
     Zoom(ZoomCmd),

@@ -274,6 +274,36 @@ pub fn upscale(img: &Image, k: u32) -> Image {
     out
 }
 
+/// `r` without the words that sit on a QR code (its modules read as garbage "text").
+pub fn without_codes(r: &OcrResult, codes: &[crate::qr::Code]) -> OcrResult {
+    if codes.is_empty() {
+        return r.clone();
+    }
+    let on_code = |w: &OcrWord| {
+        let (cx, cy) = w.rect.center();
+        codes.iter().any(|c| c.contains(cx, cy))
+    };
+    let lines = r
+        .lines
+        .iter()
+        .map(|l| OcrLine { words: l.words.iter().filter(|w| !on_code(w)).cloned().collect() })
+        .filter(|l| !l.words.is_empty())
+        .collect();
+    OcrResult { lines, language: r.language.clone(), angle: r.angle }
+}
+
+/// What the Capture Text window shows: the content of any QR codes first, then the
+/// recognized text (without the "words" read off the codes themselves).
+pub fn text_with_codes(r: &OcrResult, codes: &[crate::qr::Code], keep_line_breaks: bool) -> String {
+    let text = without_codes(r, codes).text(keep_line_breaks);
+    let qr = crate::qr::texts(codes).join("\n");
+    match (qr.is_empty(), text.is_empty()) {
+        (true, _) => text,
+        (false, true) => qr,
+        (false, false) => format!("{qr}\n\n{text}"),
+    }
+}
+
 /// Installed recognizer languages as (BCP-47 tag, display name). Blocking-free but uses
 /// WinRT; call from a worker thread.
 pub fn languages() -> Vec<(String, String)> {
@@ -397,6 +427,29 @@ mod tests {
         let r = OcrResult { lines: vec![l.clone(), l], language: "en-US".into(), angle: None };
         assert_eq!(r.text(true), "Hello world\nHello world");
         assert_eq!(r.text(false), "Hello world Hello world");
+    }
+
+    #[test]
+    fn qr_codes_come_first_and_their_modules_are_not_text() {
+        let word = |text: &str, x: f32, y: f32| OcrWord { text: text.into(), rect: BoxF { x, y, w: 40.0, h: 20.0 } };
+        let r = OcrResult {
+            lines: vec![
+                OcrLine { words: vec![word("Scan", 10.0, 10.0), word("me", 60.0, 10.0)] },
+                OcrLine { words: vec![word("Eß", 120.0, 120.0)] },
+                OcrLine { words: vec![word("□■", 150.0, 150.0), word("below", 400.0, 150.0)] },
+            ],
+            language: "en-US".into(),
+            angle: None,
+        };
+        let code = crate::qr::Code { text: "https://example.com".into(), bounds: (100, 100, 300, 300) };
+        assert_eq!(text_with_codes(&r, &[], true), "Scan me\nEß\n□■ below");
+        assert_eq!(text_with_codes(&r, std::slice::from_ref(&code), true), "https://example.com\n\nScan me\nbelow");
+        let clean = without_codes(&r, std::slice::from_ref(&code));
+        assert_eq!((clean.lines.len(), clean.word_count()), (2, 3));
+        // Only a code in the capture: just its content.
+        let only = OcrResult { lines: vec![OcrLine { words: vec![word("x", 150.0, 150.0)] }], ..Default::default() };
+        assert_eq!(text_with_codes(&only, &[code.clone(), code], false), "https://example.com\nhttps://example.com");
+        assert_eq!(text_with_codes(&OcrResult::default(), &[], true), "");
     }
 
     #[test]

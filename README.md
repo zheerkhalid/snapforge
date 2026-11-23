@@ -30,7 +30,8 @@ It ships as a single 11.5 MB EXE with no runtimes, no account, no cloud and no t
 [**Hotkeys**](#%EF%B8%8F-default-hotkeys) ·
 [**Build**](#%EF%B8%8F-build-from-source) ·
 [**Architecture**](#-architecture) ·
-[**Developer**](#-developer)
+[**Developer**](#-developer) ·
+[**Changelog**](CHANGELOG.md)
 
 </div>
 
@@ -65,15 +66,17 @@ One self-contained `SnapForge.exe` with a static CRT. It needs no .NET, no VC++ 
 
 | | Area | Highlights |
 |:-:|---|---|
-| 🖼️ | **Capture** | **Modes:** active window · window/object with hover highlight, Ctrl multi-select and nested UI elements · rectangle with an 8× magnifier loupe, Tab corner switch and 1 px nudges · freehand · full screen (active or all monitors) · scrolling (vertical, horizontal or both, from the top of the page, with sticky-header detection) · fixed-size presets<br>**Helpers:** repeat last capture · countdown delay · auto capture at an interval · tiny 1×1 captures |
+| 🖼️ | **Capture** | **Modes:** active window · window/object with hover highlight, Ctrl multi-select and nested UI elements · rectangle with an 8× magnifier loupe, Tab corner switch and 1 px nudges · freehand · full screen (the monitor under the pointer, or all monitors) · scrolling (vertical, horizontal or both, from the top of the page, with sticky-header detection) · fixed-size presets<br>**Helpers:** repeat last capture · countdown delay · auto capture at an interval · tiny 1×1 captures |
 | 🎮 | **Capture engine** | Windows.Graphics.Capture (games, DirectX, **HDR tone-mapped to SDR**, borderless), DXGI Desktop Duplication, and GDI. The fastest reliable engine is chosen automatically. |
 | 📤 | **Output** | Editor · Draw · clipboard (with alpha) · file (PNG/JPG/BMP/GIF/TIFF/TGA/PCX/WebP) · printer · email (MAPI) · Word/Excel/PowerPoint (COM) · OneNote · FTP/SFTP · external program · date/time stamp · templated file names |
 | ✏️ | **Editor** | **Workspace:** tabs and workspaces · unlimited, memory-aware undo · command palette (Ctrl+K) · right-click the image to copy it to the clipboard, paste, crop, save or pin<br>**Editing:** crop, resize, rotate, flip, canvas size · selections (move, copy, statistics) · edge drag to trim or extend · clone stamp · remove/insert strip · transparent background<br>**More:** scanner (WIA, with deskew) · Edit With … |
-| 🎨 | **Effects** | Blur, sharpen, pixelate, color adjust, sepia, negative, 256/16/4/2-color reduction, spotlight, drop shadow, frame, torn edge, fade edge, reflection, watermark, caption, oil paint, sketch, all with live preview |
+| 🎨 | **Effects** | **Beautify** (gradient or solid background, padding, rounded corners, shadow, fixed shapes such as 16:9), blur, sharpen, pixelate, color adjust, sepia, negative, 256/16/4/2-color reduction, spotlight, drop shadow, frame, torn edge, fade edge, reflection, watermark, caption, oil paint, sketch, all with live preview |
 | 🖌️ | **Annotations** | **Text:** straight, curved or along a path, with shadow, outline and callouts<br>**Lines:** arrows (8 heads, 10 decorative styles), curves, polylines, L-lines<br>**Shapes and marks:** shapes, brackets, highlighters, magnifier callouts, step stamps 0–999, color emoji, 3D arrows, mouse pointers<br>**Pixel tools:** blur, pixelate, eraser, fill, pencil<br>Annotations stay editable in `.sfcap` projects. |
 | 🎬 | **Recorder** | Hardware H.264/AAC MP4, WMV, MP3 · microphone and system audio mixed · webcam picture-in-picture · click highlights and sounds · F5 live zoom · pause/resume · scheduled recording · **crash-safe fragmented MP4** |
 | 🎞️ | **Video editor** | Timeline with thumbnails and waveform · trim and cut · frame stepping · timed annotations · zoom & pan keyframes · title cards · save frame · MP4 and **animated GIF** export · `.sfvid` projects |
-| 📌 | **Pin & OCR** | Pin captures as always-on-top windows (zoom, opacity, draw mode) · Capture Text with Windows OCR (tiling for images over 10 000 px) |
+| 📌 | **Pin & OCR** | Pin captures as always-on-top windows (zoom, opacity, draw mode) · Capture Text with Windows OCR (tiling for images over 10 000 px), which also reads **QR codes** |
+| 🔒 | **Share-ready** | **Hide Private Details**: finds e-mail addresses, phone numbers and card numbers with OCR and covers them with editable pixel, blur or black-bar annotations, all on your PC · **Read QR Code** from a picture or a selection |
+| 🕘 | **Capture History** | The latest captures are kept, including clipboard-only ones · search by date, size, type, file name or the text in the picture · can be limited or turned off |
 | 🧪 | **Screen tools** | Color picker (HEX/RGB/decimal, recent colors) · magnifier · crosshair · focus spotlight · calibrated ruler with protractor |
 | 🧾 | **Tools** | Combine images · convert images to a multi-page PDF · batch print with headers and footers |
 | 🤖 | **Automation** | `SnapForge.exe --capture region --out clipboard`, single-instance forwarding, `--bench` |
@@ -102,6 +105,10 @@ One self-contained `SnapForge.exe` with a static CRT. It needs no .NET, no VC++ 
 <tr>
 <td width="50%" align="center"><b>Pin to screen in draw mode</b><br><img src="docs/screenshots/pin.png" alt="Pinned image" /></td>
 <td width="50%" align="center"><b>Screen ruler</b><br><img src="docs/screenshots/tool-ruler.png" alt="Ruler" /></td>
+</tr>
+<tr>
+<td width="50%" align="center"><b>Beautify: background, rounded corners, shadow</b><br><img src="docs/screenshots/beautify.png" alt="A screenshot on a gradient background with rounded corners and a shadow" /></td>
+<td width="50%" align="center"><b>Hide Private Details (before and after)</b><br><img src="docs/screenshots/hide-private.png" alt="E-mail address, phone number and card number covered automatically" /></td>
 </tr>
 <tr>
 <td width="50%" align="center"><b>Convert to MP4</b><br><img src="docs/screenshots/convert.png" alt="Convert to MP4" width="360" /></td>
@@ -173,9 +180,9 @@ flowchart LR
   * The **editor** runs eframe on its own thread, created on first use and then hidden and reused.
   * The **recorder** uses separate capture, audio and encoder threads joined by bounded channels.
 * **Data:** images are premultiplied BGRA. Annotations are a separate vector list and are flattened only on export. Projects are saved as `.sfcap` (a zip of the original PNG, the annotation JSON and metadata).
-* **Modules:** `capture/` · `overlay/` · `editor/` · `draw/` · `effects/` · `compose/` · `recorder/` · `video_editor/` · `ocr/` · `pin/` · `tools/` · `output/` · `settings/` · `settings_ui/` · `hotkeys/` · `tray/` · `toolbar/`
+* **Modules:** `capture/` · `overlay/` · `editor/` · `draw/` · `effects/` · `compose/` · `recorder/` · `video_editor/` · `ocr/` · `redact` · `qr` · `caplog` · `pin/` · `tools/` · `output/` · `settings/` · `settings_ui/` · `hotkeys/` · `tray/` · `toolbar/`
 
-The milestone checklist is in [`PLAN.md`](PLAN.md), and every judgment call is explained in [`DECISIONS.md`](DECISIONS.md).
+The milestone checklist is in [`PLAN.md`](PLAN.md), every judgment call is explained in [`DECISIONS.md`](DECISIONS.md), and what changed in each version is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 👨‍💻 Developer
 

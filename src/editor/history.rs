@@ -169,6 +169,9 @@ pub struct History {
     /// Compress on the calling thread (tests) instead of a worker.
     sync: bool,
     in_flight: HashSet<u64>,
+    /// Steps that belong to the step recorded just before them (a crop moves the
+    /// annotations in a second step): undone and redone together, listed once.
+    linked: HashSet<u64>,
     tx: Sender<(u64, Option<Packed>)>,
     rx: Receiver<(u64, Option<Packed>)>,
     /// Called when a background compression finished (repaint request).
@@ -191,6 +194,7 @@ impl History {
             budget,
             sync: false,
             in_flight: HashSet::new(),
+            linked: HashSet::new(),
             tx,
             rx,
             waker: None,
@@ -213,11 +217,28 @@ impl History {
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
+    /// Names of the undoable steps, newest first (a linked pair is listed once).
     pub fn undo_names(&self) -> impl Iterator<Item = &str> {
-        self.undo.iter().rev().map(|s| s.name.as_str())
+        self.undo.iter().rev().filter(move |s| !self.linked.contains(&s.id)).map(|s| s.name.as_str())
     }
     pub fn redo_names(&self) -> impl Iterator<Item = &str> {
-        self.redo.iter().rev().map(|s| s.name.as_str())
+        self.redo.iter().rev().filter(move |s| !self.linked.contains(&s.id)).map(|s| s.name.as_str())
+    }
+    /// Join the newest step to the one before it.
+    pub fn link_top(&mut self) {
+        if self.undo.len() >= 2 {
+            if let Some(s) = self.undo.last() {
+                self.linked.insert(s.id);
+            }
+        }
+    }
+    /// The next undo is the second half of a pair: the step under it goes with it.
+    pub fn undo_top_linked(&self) -> bool {
+        self.undo.last().is_some_and(|s| self.linked.contains(&s.id))
+    }
+    /// The next redo is the second half of a pair whose first half was just redone.
+    pub fn redo_top_linked(&self) -> bool {
+        self.redo.last().is_some_and(|s| self.linked.contains(&s.id))
     }
     pub fn undo_len(&self) -> usize {
         self.undo.len()

@@ -37,6 +37,33 @@ impl Default for ScanSettings {
     }
 }
 
+/// How Hide Private Details covers what it finds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RedactStyle {
+    #[default]
+    Pixelate,
+    Blur,
+    /// A solid black bar (nothing of the text survives).
+    Bar,
+}
+
+/// Last choices of Tools ▸ Hide Private Details.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RedactSettings {
+    pub email: bool,
+    pub phone: bool,
+    pub card: bool,
+    pub style: RedactStyle,
+}
+
+impl Default for RedactSettings {
+    fn default() -> Self {
+        Self { email: true, phone: true, card: true, style: RedactStyle::Pixelate }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EditorExtSettings {
@@ -58,6 +85,7 @@ pub struct EditorExtSettings {
     pub sequence_start: u32,
     pub sequence_digits: u32,
     pub sequence_folder: String,
+    pub redact: RedactSettings,
 }
 
 impl Default for EditorExtSettings {
@@ -75,6 +103,7 @@ impl Default for EditorExtSettings {
             sequence_start: 1,
             sequence_digits: 3,
             sequence_folder: String::new(),
+            redact: RedactSettings::default(),
         }
     }
 }
@@ -94,5 +123,9 @@ mod tests {
         assert!(p.workspaces_enabled);
         assert_eq!(p.workspaces[0].name, "A");
         assert_eq!(p.undo_raw_mb, 384);
+        assert_eq!(p.redact, RedactSettings::default());
+        let r: EditorExtSettings = toml::from_str("[redact]\nphone = false\nstyle = \"bar\"\n").expect("de");
+        assert!(r.redact.email && !r.redact.phone);
+        assert_eq!(r.redact.style, RedactStyle::Bar);
     }
 }

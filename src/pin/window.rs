@@ -649,7 +649,8 @@ fn save_as(hwnd: HWND) {
         let s = settings::get();
         (s.output_folder(), s.output.format.extension())
     };
-    let suggested = settings::filename::next_output_path(&folder, ext);
+    // A suggestion only (the dialog may be cancelled): do not use up the file-name counter.
+    let suggested = settings::filename::peek_output_path(&folder, ext);
     let name = suggested.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| format!("pin.{ext}"));
     let mut file: Vec<u16> = name.encode_utf16().collect();
     file.resize(1024, 0);

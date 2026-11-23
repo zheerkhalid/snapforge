@@ -4,6 +4,10 @@
 #ifndef AppVersion
   #define AppVersion "0.1.0"
 #endif
+; Cargo's output folder (package.ps1 passes CARGO_TARGET_DIR when it is set).
+#ifndef TargetDir
+  #define TargetDir "..\target"
+#endif
 
 [Setup]
 AppId={{6E7B2F3A-9C41-4B8E-A5D2-5F0C3E9A1B77}
@@ -23,7 +27,7 @@ ArchitecturesAllowed=x64compatible arm64
 ArchitecturesInstallIn64BitMode=x64compatible arm64
 OutputDir=..\dist
 OutputBaseFilename=SnapForge-Setup
-SetupIconFile=..\target\snapforge.ico
+SetupIconFile={#TargetDir}\snapforge.ico
 UninstallDisplayIcon={app}\SnapForge.exe
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -40,7 +44,7 @@ Name: "startup"; Description: "Start SnapForge with Windows"; GroupDescription: 
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\target\release\SnapForge.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#TargetDir}\release\SnapForge.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\docs\USAGE.md"; DestDir: "{app}"; Flags: ignoreversion
 

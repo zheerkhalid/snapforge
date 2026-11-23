@@ -48,6 +48,7 @@ docs/USAGE.md
 | zip | 4 (deflate only) | `.sfcap` projects | ~0.1 MB |
 | gif | 0.14 | Animated GIF export (already in the tree via `image`) | 0 |
 | windows-core | 0.58 | `#[implement]` for COM callbacks (already in the tree) | 0 |
+| rqrr | 0.10 (no `img` feature) | QR code reading in Capture Text and the editor | ~0.1 MB |
 
 Not needed in the end: `mp3lame-encoder` (Windows' built-in MP3 encoder MFT is used), `gifski` (GPL licensing and about 1 MB), and `cosmic-text` (DirectWrite renders text instead, adding nothing to the binary). The final release EXE is **11.5 MB**.
 
@@ -89,6 +90,13 @@ Each phase was built by parallel agents, each in its own git worktree, against s
 - [x] Pin to screen (zoom, opacity, draw mode, canvas expand, Space/Enter behaviours, send to editor)
 - [x] OCR with Windows.Media.Ocr (language choice, tiling above 10 000 px)
 - [x] Color picker, magnifier, crosshair, focus, calibrated ruler with protractor
+
+### 0.2.0: share-ready and history ✅
+- [x] Beautify effect (gradient / solid / transparent backdrop, padding, corners, shadow, fixed shapes)
+- [x] Hide Private Details (OCR + e-mail / phone / card matchers → editable cover annotations)
+- [x] QR code reading (editor command, Capture Text)
+- [x] Capture History (store, search by text in the picture, window, tray entry)
+- [x] Exit prompt for unsaved tabs, reserved output names, serialized settings saves, linked undo steps
 
 ### Phase 6: settings, polish and packaging ✅
 - [x] Settings window (all tabs, hotkey conflict detection, import/export, per-tab reset, remembered placement)

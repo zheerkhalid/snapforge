@@ -331,6 +331,33 @@ pub(crate) fn install(r: &mut EffectRegistry) {
     );
 
     // ------------------------------------------------------------- Effects ▸ decorate
+    let mut backdrops: Vec<String> =
+        (1..=fx::GRADIENTS.len()).map(|i| t(&format!("fx-beautify-gradient-{i}"))).collect();
+    backdrops.push(t("fx-beautify-solid"));
+    backdrops.push(t("fx-beautify-transparent"));
+    let mut beautify = EffectDef::new("effects.beautify", lbl("fx-beautify"), E, "decorate", |img, v, ctx| {
+        fx::beautify(img, &beautify_params(v, ctx))
+    })
+    .with_params(vec![
+        choice_of("backdrop", lbl("fx-param-background"), backdrops, 0),
+        ParamDef::color("color", lbl("fx-beautify-color"), [255, 255, 255, 255], false)
+            .tooltip(t("fx-beautify-color-tip")),
+        ParamDef::int("padding", lbl("fx-beautify-padding"), 0, 400, 64).suffix(" px"),
+        ParamDef::int("corner_radius", lbl("fx-frame-corner-radius"), 0, 100, 12).suffix(" px"),
+        ParamDef::int("shadow", lbl("fx-beautify-shadow"), 0, 100, 50).suffix("%"),
+        choice_of(
+            "ratio",
+            lbl("fx-beautify-ratio"),
+            std::iter::once(t("fx-beautify-ratio-auto"))
+                .chain(BEAUTIFY_RATIOS.iter().map(|(w, h)| format!("{w}:{h}")))
+                .collect(),
+            0,
+        ),
+    ])
+    .with_shortcut("Ctrl+B")
+    .whole_image();
+    beautify.icon = "✨";
+    r.register(beautify);
     r.register(
         EffectDef::new("effects.shadow", lbl("fx-drop-shadow"), E, "decorate", |img, v, ctx| {
             fx::drop_shadow(img, &shadow_params(v, ctx))
@@ -553,6 +580,25 @@ pub(crate) fn install(r: &mut EffectRegistry) {
     );
 }
 
+/// Aspect ratios offered by Beautify after "as is".
+const BEAUTIFY_RATIOS: [(u32, u32); 5] = [(16, 9), (4, 3), (1, 1), (3, 4), (9, 16)];
+
+fn beautify_params(v: &ParamValues, ctx: &EffectCtx) -> fx::BeautifyParams {
+    let n = fx::GRADIENTS.len();
+    let backdrop = match v.choice("backdrop") {
+        i if i < n => fx::Backdrop::Gradient(i),
+        i if i == n => fx::Backdrop::Solid(color(v, "color")),
+        _ => fx::Backdrop::Transparent,
+    };
+    fx::BeautifyParams {
+        backdrop,
+        padding: px(v, "padding", ctx),
+        corner_radius: px(v, "corner_radius", ctx),
+        shadow: v.i32("shadow").clamp(0, 100) as u8,
+        ratio: v.choice("ratio").checked_sub(1).and_then(|i| BEAUTIFY_RATIOS.get(i).copied()),
+    }
+}
+
 fn shadow_params(v: &ParamValues, ctx: &EffectCtx) -> fx::ShadowParams {
     fx::ShadowParams {
         offset_x: spx(v, "offset_x", ctx),
@@ -599,7 +645,7 @@ mod tests {
     #[test]
     fn every_installed_effect_applies_on_a_small_image() {
         let (r, ids) = installed();
-        assert_eq!(ids.len(), 33, "installed effects");
+        assert_eq!(ids.len(), 34, "installed effects");
         let img = test_image();
         for id in ids {
             let d = r.get(id).expect("registered");
@@ -617,6 +663,41 @@ mod tests {
             // A 1×1 input must not panic either.
             let tiny = Image::filled(1, 1, [10, 20, 30, 255]);
             let _ = apply_defaults(d, &tiny, &EffectCtx { scale: 1.0, preview: false, background: [0; 4] });
+        }
+    }
+
+    #[test]
+    fn beautify_maps_backdrop_ratio_and_preview_scale() {
+        let (r, _) = installed();
+        let d = r.get("effects.beautify").expect("beautify");
+        assert_eq!(d.shortcut, Some("Ctrl+B"));
+        assert_eq!(d.scope, Scope::WholeImage);
+        let mut v = ParamValues::defaults(d.params.as_deref().unwrap_or(&[]));
+        let ctx = EffectCtx { scale: 1.0, preview: false, background: [0; 4] };
+        let img = Image::filled(100, 50, [5, 6, 7, 255]);
+        let out = (d.apply)(&img, &v, &ctx);
+        assert_eq!((out.width, out.height), (228, 178));
+        assert_eq!(out.pixel(0, 0)[3], 255, "gradient backdrop is opaque");
+        // The preview proxy scales the padding with the picture.
+        let half = Image::filled(50, 25, [5, 6, 7, 255]);
+        let out = (d.apply)(&half, &v, &EffectCtx { scale: 0.5, preview: true, ..ctx });
+        assert_eq!((out.width, out.height), (114, 89));
+        use super::super::effects::ParamValue;
+        // Last backdrop choice is transparent, the one before it the solid colour.
+        v.set("backdrop", ParamValue::Choice(fx::GRADIENTS.len() + 1));
+        assert_eq!((d.apply)(&img, &v, &ctx).pixel(0, 0)[3], 0);
+        v.set("backdrop", ParamValue::Choice(fx::GRADIENTS.len()));
+        v.set("shadow", ParamValue::Int(0));
+        assert_eq!((d.apply)(&img, &v, &ctx).pixel(0, 0), [255, 255, 255, 255]);
+        // 1:1 pads the short side.
+        v.set("ratio", ParamValue::Choice(3));
+        let out = (d.apply)(&img, &v, &ctx);
+        assert_eq!((out.width, out.height), (228, 228));
+        // Every choice has a translated label.
+        for p in d.params.as_deref().unwrap_or(&[]) {
+            if let ParamKind::Choice { options, .. } = &p.kind {
+                assert!(options.iter().all(|o| !o.starts_with("fx-")), "{options:?}");
+            }
         }
     }
 

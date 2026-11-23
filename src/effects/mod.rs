@@ -6,6 +6,7 @@
 //!
 //! Heavy filters split the image into row bands and run them on scoped threads.
 
+pub mod beautify;
 pub mod color;
 pub mod filter;
 pub mod fx;
@@ -21,6 +22,7 @@ use crate::common::Image;
 use serde::{Deserialize, Serialize};
 
 // The flat `effects::name` API.
+pub use beautify::*;
 pub use color::*;
 pub use filter::*;
 pub use fx::*;

@@ -55,6 +55,7 @@ mod menus;
 mod modals;
 mod palette;
 mod param_dialog;
+mod privacy;
 mod scan;
 mod scan_post;
 mod screen_pick;
@@ -414,6 +415,22 @@ pub fn open_files(paths: Vec<PathBuf>) {
 }
 
 /// Show the editor (empty if no tabs).
+/// Tabs with changes that were never saved (all workspaces), as of the editor's last
+/// frame. The editor window only hides on close, so the app asks before exiting.
+static UNSAVED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn unsaved_count() -> usize {
+    if is_running() {
+        UNSAVED.load(Ordering::Acquire)
+    } else {
+        0
+    }
+}
+
+pub(crate) fn set_unsaved_count(n: usize) {
+    UNSAVED.store(n, Ordering::Release);
+}
+
 pub fn show() {
     START_HIDDEN.store(false, Ordering::Release);
     send(EditorMsg::Show, true);

@@ -32,9 +32,17 @@ pub enum Modal {
     Editors(Vec<ExternalEditor>),
     Scan(ScanSettings),
     NoScanner,
-    Reload { doc: DocId, path: PathBuf, editor: String },
+    Reload {
+        doc: DocId,
+        path: PathBuf,
+        editor: String,
+    },
     Shortcuts,
     RenameWorkspace(u64, String),
+    /// Tools ▸ Hide Private Details: what to look for and how to cover it.
+    Redact(crate::settings::editor_ext::RedactSettings),
+    /// Texts of the QR codes found in the picture.
+    QrCodes(Vec<String>),
 }
 
 impl Modal {
@@ -118,6 +126,8 @@ impl EditorApp {
             Modal::Reload { doc, path, editor } => self.reload_prompt(ctx, doc, path, editor),
             Modal::Shortcuts => self.shortcuts_list(ctx),
             Modal::RenameWorkspace(id, name) => self.rename_workspace(ctx, id, name),
+            Modal::Redact(form) => self.redact_modal(ctx, form),
+            Modal::QrCodes(codes) => self.qr_modal(ctx, codes),
         };
     }
 

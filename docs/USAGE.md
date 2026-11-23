@@ -17,7 +17,7 @@ SnapForge runs in the notification area (tray). Press a hotkey, or click a butto
 | Fixed-size region | `Ctrl+Shift+Alt+PrtSc` |
 | Repeat last capture | *(unassigned)* |
 
-You can reassign any hotkey in `settings.toml` under `[hotkeys]` (a Settings window arrives in Phase 6). If Windows has mapped PrtSc to open the Snipping Tool, SnapForge still takes over PrtSc when `prtsc_override = true` (the default).
+You can reassign any hotkey in **Settings ▸ Hotkeys**, which also warns about conflicts. Recording, Capture Text, pinning and the screen tools have optional hotkeys there too. If Windows has mapped PrtSc to open the Snipping Tool, SnapForge still takes over PrtSc while **Take over the PrtSc key** is on (the default).
 
 ## Capture toolbar
 
@@ -54,12 +54,12 @@ These options can be combined with any destination:
 
 - **Preview in Editor First**: shows the capture in the editor, with a *Continue to …* button.
 - **Also Copy to Clipboard**
-- **Also Save to File (Auto-Save)**: every capture is saved straight away to the output folder, named by the file-name template (Settings ▸ Output). When the capture opens in the editor, its tab is tied to that file, so **Save** updates it.
+- **Also Save to File (Auto-Save)**: every capture is saved straight away to the output folder, named by the file-name template (Settings ▸ File Name). When the capture opens in the editor, its tab is tied to that file, so **Save** updates it.
 - **Add Date/Time Stamp**
 
 ## File names
 
-Set the template with `[filename] template`. Tokens:
+Set the template in **Settings ▸ File Name** (the next counter value is there too). Tokens:
 
 | Token | Meaning | Example |
 |---|---|---|
@@ -70,7 +70,7 @@ Set the template with `[filename] template`. Tokens:
 | `%USERNAME%` `%COMPUTERNAME%` | user and computer names | |
 | `%DESKTOP%` `%DOCUMENTS%` `%PICTURES%` | folders (put them at the start for an absolute path) | |
 
-The default template is `SnapForge_$Y-$M-$D_$H$N$S`, saved in `Pictures\SnapForge`. Existing files are never overwritten; SnapForge adds ` (2)`, ` (3)` and so on.
+The default template is `SnapForge_$Y-$M-$D_$H$N$S`, saved in `Pictures\SnapForge`. Existing files are never overwritten; SnapForge adds ` (2)`, ` (3)` and so on, also when several captures are taken within the same second.
 
 ## Command line
 
@@ -78,12 +78,19 @@ The default template is `SnapForge_$Y-$M-$D_$H$N$S`, saved in `Pictures\SnapForg
 SnapForge.exe --capture region --out clipboard
 SnapForge.exe --capture fullscreen --file "C:\shots\screen.png"
 SnapForge.exe --capture active --delay 3 --out file
+SnapForge.exe --capture window --out draw
 SnapForge.exe --open picture.png
+SnapForge.exe --tray
+SnapForge.exe --toolbar
+SnapForge.exe --settings-dir "D:\SnapForgeSettings"
 SnapForge.exe --bench
 SnapForge.exe --help
 ```
 
-If SnapForge is already running, the command is forwarded to it.
+- `--tray` starts without showing the toolbar; `--toolbar` shows it.
+- `--file` needs an image file name (`.png`, `.jpg`, `.bmp`, `.gif`, `.tif`, `.tga`, `.pcx` or `.webp`).
+- If SnapForge is already running, the command is forwarded to it. Relative file names are resolved in the folder you ran the command from.
+- A capture from the command line that opens the editor leaves SnapForge running in the tray.
 
 ## Portable mode and settings
 
@@ -134,6 +141,33 @@ The editor's left palette holds every drawing tool. Annotations stay editable ob
 
 Image ▸ Resize to 25 / 50 / 75 / 200 % is on `Ctrl+1` … `Ctrl+4`. Effects apply to the selection when there is one. Make Color Transparent, Spotlight, Remove / Insert Strip and Watermark work directly on the canvas; the Clone Stamp tool takes its source from an Alt+click.
 
+## Share-ready: Beautify, Hide Private Details, Read QR Code
+
+The **Share-ready** group on the editor toolbar holds three tools for pictures you are about to send to someone.
+
+- **Beautify** (`Ctrl+B`, Effects ▸ Beautify): places the picture on a padded background with rounded corners and a soft shadow.
+  - *Background*: eight gradients, a solid color (pick it under *Solid color*), or transparent.
+  - *Padding*, *Corner radius* and *Shadow* (0 turns the shadow off).
+  - *Shape*: keep the picture's own shape, or pad the result to 16:9, 4:3, 1:1, 3:4 or 9:16.
+  - The dialog shows a live preview; Apply is one undo step.
+- **Hide Private Details** (`Ctrl+Shift+H`, Tools menu): SnapForge reads the text in the picture and covers what it finds.
+  - Choose what to look for: e-mail addresses, phone numbers, payment card numbers.
+  - Choose the cover: pixels, blur or a black bar. A black bar is the safest; pixels and blur are strong, but they are still made from the original pixels.
+  - Each cover is an annotation: move it, resize it or delete it like any other. One Undo removes them all.
+  - With a selection, only the selection is checked.
+  - It uses the Windows text recognition of *Capture Text* and runs entirely on your PC. Text recognition can miss things (small or stylized text, handwriting), so look over the picture before you share it. Ordinary numbers such as dates, amounts, IP addresses and order numbers are left alone on purpose.
+- **Read QR Code** (`Ctrl+Shift+Q`, Tools menu): shows the content of every QR code in the picture, or in the selection, with **Copy** and, for web addresses, **Open Link**. Only QR codes are read, not other barcodes.
+
+## Capture History
+
+SnapForge keeps your most recent captures so you can get one back, even if it only went to the clipboard.
+
+- Open it from the tray menu (**Capture History…**) or from the editor's Tools menu.
+- Type in the search box to filter by date, size, capture type, file name, or words that appear in the picture (the text is read in the background while the window is open).
+- Click a capture to open it in the editor. Right-click for **Copy**, **Show in folder** and **Remove from history**.
+- Captures that were saved to a file (Auto-Save or the File destination) are listed from where they are; SnapForge never deletes your files. Other captures are kept as PNG files in the `history` folder inside the settings folder, and the oldest are removed when the limit is reached.
+- **Settings ▸ History** sets how many captures are kept (50 by default), whether their text is read, and turns the history off. **Clear history** removes the list and the copies SnapForge made.
+
 ## Screen recorder
 
 Start a recording from the tray or toolbar menu (**Screen Recorder**), or with the optional hotkeys:
@@ -169,7 +203,7 @@ Open it with **Video Editor…** or `SnapForge.exe --open video.mp4`.
   - Drag to move it, use the wheel to zoom, and `Ctrl+wheel` to change opacity.
   - `D` toggles draw mode (pen, text, steps), and `Ctrl+drag` on a border grows or crops the canvas.
   - Space and Enter actions are configurable. `Esc` or a double-click closes the pin.
-- **Capture Text (OCR)**: select a region and the recognized text appears in an editable window. Choose the language from the recognizers installed in Windows, then copy all or part of the text.
+- **Capture Text (OCR)**: select a region and the recognized text appears in an editable window. Choose the language from the recognizers installed in Windows, then copy all or part of the text. If the region contains a **QR code**, its content is shown first (this needs no OCR language). `Esc` closes the window.
 
 ## Screen tools
 

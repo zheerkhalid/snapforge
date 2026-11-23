@@ -436,6 +436,7 @@ fx-move-selection = Move Selection
 fx-copy-selection = Copy Selection
 fx-spotlight = Spotlight…
 fx-drop-shadow = Drop Shadow…
+fx-beautify = Beautify…
 fx-frame = Frame…
 fx-torn-edge = Torn Edge…
 fx-fade-edge = Fade Edge…
@@ -549,6 +550,23 @@ fx-shadow-blur = Blur
 fx-shadow-opacity = Opacity (%)
 fx-shadow-color = Shadow color
 fx-shadow-corner-radius = Round image corners
+# Beautify
+fx-beautify-gradient-1 = Sunset gradient
+fx-beautify-gradient-2 = Ocean gradient
+fx-beautify-gradient-3 = Violet gradient
+fx-beautify-gradient-4 = Forest gradient
+fx-beautify-gradient-5 = Ember gradient
+fx-beautify-gradient-6 = Slate gradient
+fx-beautify-gradient-7 = Mist gradient
+fx-beautify-gradient-8 = Midnight gradient
+fx-beautify-solid = Solid color
+fx-beautify-transparent = Transparent
+fx-beautify-color = Solid color
+fx-beautify-color-tip = Used when the background is "Solid color".
+fx-beautify-padding = Padding
+fx-beautify-shadow = Shadow
+fx-beautify-ratio = Shape
+fx-beautify-ratio-auto = As the picture
 # Frame
 fx-frame-style = Style
 fx-frame-solid = Solid
@@ -1217,6 +1235,44 @@ ve-error-overwrite-source = Choose a different file: the export can't replace th
 ## Editor effects (integration)
 fx-round-corners = Round Corners…
 fx-size-zero-tip = 0 keeps the current size
+## Exit with unsaved pictures
+exit-unsaved-one = One picture in the editor has changes that were not saved. Exit SnapForge and lose them?
+exit-unsaved-many = { $n } pictures in the editor have changes that were not saved. Exit SnapForge and lose them?
+
+## Hide private details and QR codes
+editor-group-share = Share-ready
+redact-command = Hide Private Details…
+redact-title = Hide private details
+redact-intro = SnapForge reads the text in the picture and covers what it finds. With a selection, only the selection is checked.
+redact-email = E-mail addresses
+redact-phone = Phone numbers
+redact-card = Payment card numbers
+redact-style = Cover with
+redact-style-pixelate = Pixels
+redact-style-blur = Blur
+redact-style-bar = Black bar
+redact-note = Each cover is an annotation you can move, resize or delete, and one Undo removes them all. Text recognition can miss things, so check the picture before you share it. A black bar is the safest cover.
+redact-go = Find and Hide
+redact-working = Reading the text in the picture…
+redact-undo-name = Hide Private Details
+redact-none = No e-mail addresses, phone numbers or card numbers were found.
+redact-done = Covered: { $what }. Check the picture before you share it.
+redact-failed = The text could not be read: { $error }
+redact-changed = The picture changed while its text was being read. Try again.
+redact-count-email-one = 1 e-mail address
+redact-count-email-many = { $n } e-mail addresses
+redact-count-phone-one = 1 phone number
+redact-count-phone-many = { $n } phone numbers
+redact-count-card-one = 1 card number
+redact-count-card-many = { $n } card numbers
+qr-command = Read QR Code
+qr-title = QR code
+qr-title-many = { $n } QR codes
+qr-copy = Copy
+qr-open = Open Link
+qr-none = No QR code was found in the picture.
+ocr-status-qr = QR codes: { $n }
+
 ## Editor tools dialogs (integration)
 tools-files-count = Images ({ $count })
 tools-add-files = Add files…

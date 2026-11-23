@@ -115,7 +115,62 @@ pub fn parse(args: &[String]) -> Result<Cli, CliError> {
     if c.file.is_some() && c.capture.is_none() {
         return Err(CliError("--file needs --capture".into()));
     }
+    if let Some(f) = &c.file {
+        // Without a known extension the save would fail later, where nobody sees it.
+        let ext = f.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        if crate::settings::ImageFormat::from_extension(&ext).is_none() {
+            return Err(CliError(format!(
+                "--file needs an image file name (png, jpg, bmp, gif, tif, tga, pcx or webp): '{}'",
+                f.display()
+            )));
+        }
+    }
     Ok(c)
+}
+
+/// `args` with every file argument made absolute against `cwd` (the values of `--file`,
+/// `--open` and `--settings-dir`, and bare file names). A command line forwarded to the
+/// running instance is parsed there, where relative paths would otherwise resolve against
+/// that instance's working folder.
+pub fn absolutize(args: &[String], cwd: &std::path::Path) -> Vec<String> {
+    let abs = |a: &str| -> String {
+        let p = std::path::Path::new(a);
+        if a.is_empty() || p.is_absolute() || p.has_root() {
+            a.to_string()
+        } else {
+            cwd.join(p).to_string_lossy().into_owned()
+        }
+    };
+    let mut out = Vec::with_capacity(args.len());
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i].as_str();
+        if !a.starts_with('-') {
+            out.push(abs(a));
+            i += 1;
+            continue;
+        }
+        out.push(a.to_string());
+        match a.trim_start_matches('-').to_ascii_lowercase().as_str() {
+            "file" | "f" | "settings-dir" => {
+                if let Some(v) = args.get(i + 1) {
+                    out.push(abs(v));
+                    i += 1;
+                }
+            }
+            // Plain values: copied as they are.
+            "capture" | "c" | "out" | "o" | "delay" | "d" => {
+                if let Some(v) = args.get(i + 1) {
+                    out.push(v.clone());
+                    i += 1;
+                }
+            }
+            // `--open a b c`: the files that follow are bare arguments, handled above.
+            _ => {}
+        }
+        i += 1;
+    }
+    out
 }
 
 /// Make console output visible when launched from a terminal (GUI-subsystem EXE).
@@ -133,6 +188,36 @@ mod tests {
 
     fn p(s: &str) -> Result<Cli, CliError> {
         parse(&s.split_whitespace().map(String::from).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn file_needs_a_known_image_extension() {
+        assert!(p("--capture fullscreen --file C:\\shots\\out").is_err());
+        assert!(p("--capture fullscreen --file out.txt").is_err());
+        for ok in ["a.png", "a.JPG", "a.jpeg", "a.bmp", "a.gif", "a.tif", "a.tga", "a.pcx", "a.webp"] {
+            assert!(p(&format!("--capture fullscreen --file {ok}")).is_ok(), "{ok}");
+        }
+    }
+
+    #[test]
+    fn forwarded_paths_become_absolute() {
+        let cwd = std::path::Path::new("D:\\work");
+        let abs = |s: &str| absolutize(&s.split_whitespace().map(String::from).collect::<Vec<_>>(), cwd).join(" ");
+        assert_eq!(abs("--capture region --file shot.png"), "--capture region --file D:\\work\\shot.png");
+        assert_eq!(abs("-c region -f sub\\shot.png -d 3"), "-c region -f D:\\work\\sub\\shot.png -d 3");
+        assert_eq!(abs("--open a.png b.sfcap --toolbar"), "--open D:\\work\\a.png D:\\work\\b.sfcap --toolbar");
+        assert_eq!(abs("picture.png"), "D:\\work\\picture.png");
+        // Already absolute (drive or UNC), option values and flags stay as they are.
+        assert_eq!(abs("--open C:\\x\\a.png \\\\server\\share\\b.png"), "--open C:\\x\\a.png \\\\server\\share\\b.png");
+        assert_eq!(abs("--capture window --out clipboard --delay 2"), "--capture window --out clipboard --delay 2");
+        assert_eq!(abs("--settings-dir cfg --tray"), "--settings-dir D:\\work\\cfg --tray");
+        assert_eq!(abs("--file"), "--file");
+        assert!(absolutize(&[], cwd).is_empty());
+        // What the running instance parses is unchanged apart from the paths.
+        let fwd = absolutize(&["--capture".into(), "active".into(), "--file".into(), "s.png".into()], cwd);
+        let c = parse(&fwd).expect("parse");
+        assert_eq!(c.file, Some(PathBuf::from("D:\\work\\s.png")));
+        assert_eq!(c.capture, Some(CaptureMode::ActiveWindow));
     }
 
     #[test]

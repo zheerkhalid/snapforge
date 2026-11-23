@@ -700,12 +700,11 @@ pub fn snapshot() -> Settings {
 
 /// Mutate settings and persist them asynchronously.
 pub fn update<R>(f: impl FnOnce(&mut Settings) -> R) -> R {
-    let (r, copy) = {
+    let r = {
         let mut g = cell().write().unwrap_or_else(|e| e.into_inner());
-        let r = f(&mut g);
-        (r, g.clone())
+        f(&mut g)
     };
-    persist_async(copy);
+    persist_async();
     r
 }
 
@@ -714,20 +713,18 @@ pub fn replace(s: Settings) {
     update(|cur| *cur = s);
 }
 
-fn persist_async(s: Settings) {
-    let p = path();
-    std::thread::Builder::new()
-        .name("settings-save".into())
-        .spawn(move || {
-            if let Err(e) = save_to(&s, &p) {
-                log::error!("settings: save failed: {e:#}");
-            }
-        })
-        .ok();
+/// One writer at a time. Each save takes the lock first and then writes the settings as
+/// they are *at that moment*, so saves that finish out of order can never leave an older
+/// state on disk, and two writers never share the temporary file.
+static SAVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn persist_async() {
+    std::thread::Builder::new().name("settings-save".into()).spawn(flush).ok();
 }
 
-/// Write the settings synchronously (used on exit).
+/// Write the settings synchronously (used on exit; also what every background save runs).
 pub fn flush() {
+    let _one_writer = SAVE.lock().unwrap_or_else(|e| e.into_inner());
     let s = snapshot();
     if let Err(e) = save_to(&s, &path()) {
         log::error!("settings: save failed: {e:#}");

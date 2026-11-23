@@ -387,6 +387,29 @@ impl Document {
         }
     }
 
+    /// Join the step just recorded to the one before it, so one Undo takes both.
+    pub fn link_last_step(&mut self) {
+        self.history.link_top();
+    }
+
+    /// Undo (`n > 0`) or redo (`n < 0`) up to `|n|` steps and return how many are left:
+    /// it stops early while a compressed step decodes on a worker (call again when the
+    /// document is no longer busy). Linked steps count as one.
+    pub fn step_many(&mut self, mut n: isize) -> isize {
+        while n != 0 && !self.busy() {
+            let pair = n > 0 && self.floating.is_none() && self.history.undo_top_linked();
+            let ok = if n > 0 { self.undo() } else { self.redo() };
+            if !ok {
+                return 0;
+            }
+            let more = if n > 0 { pair } else { self.history.redo_top_linked() };
+            if !more {
+                n -= n.signum();
+            }
+        }
+        n
+    }
+
     fn restore(&mut self, step: Step, redo: bool) {
         let pixels = match &step.kind {
             StepKind::Overlay => {
@@ -537,6 +560,7 @@ impl Document {
                 };
                 self.record("Move Selection", StepKind::Pixels(patch));
             }
+            self.clip_selection();
             return false;
         }
         let mut img = self.image.clone();
@@ -553,7 +577,16 @@ impl Document {
         }
         self.install_region(img, region);
         self.has_alpha = self.image.has_transparency();
+        self.clip_selection();
         changed
+    }
+
+    /// Keep the selection inside the picture (merged pixels may have hung over an edge).
+    fn clip_selection(&mut self) {
+        if let Some(sel) = &self.selection {
+            let clipped = sel.clipped(self.image.bounds());
+            self.set_selection(clipped);
+        }
     }
 
     /// Merge floating pixels (if any), keeping the selection where they landed.
@@ -1046,6 +1079,67 @@ mod tests {
         // The transparent paste blends to nothing, so only "Paint" is recorded.
         // (The undone move sat on the redo stack, which the new edit cleared.)
         assert_eq!(d.history.undo_names().collect::<Vec<_>>(), ["Paint"]);
+    }
+
+    #[test]
+    fn merged_paste_leaves_the_selection_inside_the_picture() {
+        let mut d = file_doc();
+        let (w, h) = (d.image.width as i32, d.image.height as i32);
+        // A paste that hangs over the right and bottom edges.
+        d.paste_floating(Image::filled(6, 6, [9, 9, 9, 255]), w - 2, h - 3);
+        assert_eq!(d.selection.as_ref().map(|s| s.bounds), Some(Rect::new(w - 2, h - 3, 6, 6)));
+        d.merge_floating();
+        let sel = d.selection.clone().expect("selection kept");
+        assert_eq!(sel.bounds, Rect::new(w - 2, h - 3, 2, 3));
+        // The pixels an effect would be handed match the selection again.
+        let crop = d.image.crop(sel.bounds);
+        assert_eq!((crop.width as i32, crop.height as i32), (sel.bounds.w, sel.bounds.h));
+        assert_eq!(d.image.pixel(w as u32 - 1, h as u32 - 1), [9, 9, 9, 255]);
+        // Dropped completely outside: nothing is selected afterwards.
+        d.paste_floating(Image::filled(2, 2, [1, 1, 1, 255]), w + 5, 0);
+        d.merge_floating();
+        assert!(d.selection.is_none());
+    }
+
+    #[test]
+    fn linked_steps_undo_and_redo_as_one() {
+        // A crop of an annotated picture records the pixel step and then a step that
+        // moves the annotations. One Undo must take both, and the list shows one entry.
+        let mut d = file_doc();
+        let orig = (*d.image).clone();
+        d.apply_image_edit("Paint", |img| {
+            let mut o = img.clone();
+            o.set_pixel(0, 0, [1, 2, 3, 255]);
+            o
+        });
+        let painted = (*d.image).clone();
+        assert!(d.apply_image_edit("Crop", |img| img.crop(Rect::new(1, 1, 4, 4))));
+        d.record_overlay_step("Crop");
+        d.link_last_step();
+        let cropped = (*d.image).clone();
+        assert_eq!(d.history.undo_len(), 3);
+        assert_eq!(d.history.undo_names().collect::<Vec<_>>(), ["Crop", "Paint"]);
+        // One undo: both halves of the crop.
+        assert_eq!(d.step_many(1), 0);
+        assert_eq!(*d.image, painted);
+        assert_eq!(d.history.undo_len(), 1);
+        assert_eq!(d.history.redo_names().collect::<Vec<_>>(), ["Crop"]);
+        // One redo brings both back.
+        assert_eq!(d.step_many(-1), 0);
+        assert_eq!(*d.image, cropped);
+        assert_eq!(d.history.undo_len(), 3);
+        assert!(!d.can_redo());
+        // "Undo 2 steps" from the history list: the crop and the paint.
+        assert_eq!(d.step_many(2), 0);
+        assert_eq!(*d.image, orig);
+        assert!(!d.can_undo());
+        // More than there is: stops cleanly.
+        assert_eq!(d.step_many(5), 0);
+        assert_eq!(d.step_many(-9), 0);
+        assert_eq!(*d.image, cropped);
+        // Ordinary steps are unaffected.
+        assert_eq!(d.step_many(1), 0);
+        assert_eq!(*d.image, painted);
     }
 
     #[test]

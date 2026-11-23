@@ -99,6 +99,14 @@ pub enum JobResult {
     },
     /// Show a message (e.g. a colour count).
     Toast(String),
+    /// Private details located by text recognition in a picture of `size`.
+    PrivateFound {
+        doc: DocId,
+        size: (u32, u32),
+        result: Result<Vec<crate::redact::Hit>, String>,
+    },
+    /// Texts of the QR codes found in the picture (or the selection).
+    QrRead(Vec<String>),
 }
 
 /// What an annotated project needs on disk (auto-save next to a saved image).
@@ -214,6 +222,34 @@ impl Jobs {
             let img = image.run();
             let result = output::clipboard::copy_image(&img).map_err(|e| format!("{e:#}"));
             j.send(JobResult::Copied(result));
+        });
+    }
+
+    /// Recognize the text of the flattened picture and locate private details in it
+    /// (inside `within` when there is a selection).
+    pub fn find_private(
+        &self,
+        doc: DocId,
+        image: ExportJob,
+        kinds: crate::redact::Kinds,
+        within: Option<Rect>,
+        lang: String,
+    ) {
+        self.spawn("editor-redact", move |j| {
+            let img = image.run();
+            let size = (img.width, img.height);
+            let result = crate::ocr::recognize(&img, Some(&lang))
+                .map(|ocr| super::privacy::inside(crate::redact::find(&ocr, kinds), within))
+                .map_err(|e| format!("{e:#}"));
+            j.send(JobResult::PrivateFound { doc, size, result });
+        });
+    }
+
+    /// Decode the QR codes in the flattened picture (or selection).
+    pub fn read_qr(&self, image: ExportJob) {
+        self.spawn("editor-qr", move |j| {
+            let img = image.run();
+            j.send(JobResult::QrRead(crate::qr::texts(&crate::qr::decode(&img))));
         });
     }
 

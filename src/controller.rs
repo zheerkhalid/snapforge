@@ -23,7 +23,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, GetForegroundWindow,
     GetMessageW, KillTimer, PostQuitMessage, RegisterClassW, SendMessageTimeoutW, SetTimer, TranslateMessage,
     WindowFromPoint, ASFW_ANY, HWND_MESSAGE, MSG, SMTO_ABORTIFHUNG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COPYDATA,
-    WM_TIMER, WNDCLASSW,
+    WM_ENDSESSION, WM_TIMER, WNDCLASSW,
 };
 
 pub const APP_CLASS: &str = "SnapForge.App";
@@ -48,6 +48,10 @@ struct State {
     last: Option<LastCapture>,
     /// Exit after the pending output finishes (standalone CLI run).
     exit_after_output: bool,
+    /// Tray, toolbar and hotkeys exist (not yet for a standalone `--capture` run).
+    ui_started: bool,
+    /// Never ask before exiting (the `--bench` child must end on its own).
+    quiet_exit: bool,
 }
 
 type Job = Box<dyn FnOnce() + Send>;
@@ -103,6 +107,11 @@ pub fn main_entry(args: Vec<String>) -> i32 {
 
     // Single instance: forward the command line to the running instance.
     if !cli.bench_child && !acquire_single_instance() {
+        // The running instance has its own working folder: send absolute paths.
+        let args = match std::env::current_dir() {
+            Ok(cwd) => cli::absolutize(&args, &cwd),
+            Err(_) => args,
+        };
         let forwarded = forward_to_running_instance(&args);
         log::info!("another instance is running; forwarded={forwarded}");
         return if forwarded { 0 } else { 1 };
@@ -126,28 +135,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     // A standalone automation run (`--capture` with no instance running) skips the tray UI.
     let standalone_capture = cli.capture.is_some() && !cli.bench_child;
     if !standalone_capture {
-        tray::create()?;
-        if let Some(e) = settings::take_load_error() {
-            let text = i18n::tf("notify-settings-invalid", &[("path", &settings::path().display().to_string())]);
-            log::warn!("settings: {e}");
-            tray::notify(&i18n::t("app-name"), &text, true);
-        }
-        toolbar::create()?;
         let show_toolbar = cli.show_toolbar || (!cli.tray && settings::get().toolbar.visible);
-        if show_toolbar {
-            toolbar::show(true);
-        }
-        for problem in hotkeys::start() {
-            log::warn!("hotkeys: {problem}");
-            tray::notify(&i18n::t("app-name"), &problem, true);
-        }
-        apply_auto_capture_timer();
-    }
-    if !standalone_capture {
-        crate::recorder::recover_pending();
-        crate::recorder::schedule::start_watcher();
+        start_ui(show_toolbar)?;
     }
     if cli.bench_child {
+        with_state(|s| s.quiet_exit = true);
         crate::bench::start_child();
     }
     handle_cli(&cli, standalone_capture);
@@ -167,6 +159,45 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     settings::flush();
     log::info!("SnapForge exiting");
     Ok(())
+}
+
+/// Everything a normal start shows and runs: tray icon, toolbar, hotkeys, the auto-capture
+/// timer, recording recovery and the recording schedule.
+fn start_ui(show_toolbar: bool) -> anyhow::Result<()> {
+    with_state(|s| s.ui_started = true);
+    tray::create()?;
+    if let Some(e) = settings::take_load_error() {
+        let text = i18n::tf("notify-settings-invalid", &[("path", &settings::path().display().to_string())]);
+        log::warn!("settings: {e}");
+        tray::notify(&i18n::t("app-name"), &text, true);
+    }
+    toolbar::create()?;
+    if show_toolbar {
+        toolbar::show(true);
+    }
+    for problem in hotkeys::start() {
+        log::warn!("hotkeys: {problem}");
+        tray::notify(&i18n::t("app-name"), &problem, true);
+    }
+    apply_auto_capture_timer();
+    crate::recorder::recover_pending();
+    crate::recorder::schedule::start_watcher();
+    Ok(())
+}
+
+/// A standalone `--capture` run opened the editor, so the process stays: turn it into a
+/// normal tray instance (it holds the single-instance lock, so later launches are
+/// forwarded to it and need the tray, the toolbar and the hotkeys to exist).
+fn stay_running() {
+    let start = with_state(|s| {
+        s.exit_after_output = false;
+        !s.ui_started
+    });
+    if start {
+        if let Err(e) = start_ui(false) {
+            log::error!("could not start the tray UI: {e:#}");
+        }
+    }
 }
 
 /// Apply the action part of a command line (fresh start or forwarded from another instance).
@@ -309,6 +340,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             }
             LRESULT(0)
         }
+        // Windows is shutting down or the user signs out: the process ends without
+        // reaching the normal exit path, so write the settings now.
+        WM_ENDSESSION if wp.0 != 0 => {
+            settings::flush();
+            LRESULT(0)
+        }
         WM_TIMER => {
             match wp.0 {
                 TIMER_AUTO_CAPTURE => auto_capture_tick(),
@@ -417,12 +454,32 @@ fn execute(cmd: AppCommand) {
             Err(e) => log::warn!("forwarded args rejected: {e}"),
         },
         AppCommand::Exit => {
+            // Closing the editor only hides it, so pictures that were never saved may
+            // still be open there: ask before they are lost.
+            let unsaved = if with_state(|s| s.quiet_exit) { 0 } else { editor::unsaved_count() };
+            if unsaved > 0 && !confirm_exit(unsaved) {
+                editor::show();
+                return;
+            }
             // SAFETY: ends the UI thread's message loop.
             unsafe { PostQuitMessage(0) };
         }
         // Phase 2-6 commands are dispatched in integration.rs.
         other => crate::integration::execute(other),
     }
+}
+
+/// "N pictures have unsaved changes. Exit anyway?" (No is the default button.)
+fn confirm_exit(unsaved: usize) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        MessageBoxW, IDYES, MB_DEFBUTTON2, MB_ICONWARNING, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
+    };
+    let key = if unsaved == 1 { "exit-unsaved-one" } else { "exit-unsaved-many" };
+    let text = wide(&i18n::tf(key, &[("n", &unsaved.to_string())]));
+    let title = wide(&i18n::t("app-name"));
+    let flags = MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_SETFOREGROUND | MB_TOPMOST;
+    // SAFETY: plain modal message box with NUL-terminated strings that outlive the call.
+    unsafe { MessageBoxW(HWND::default(), pcwstr(&text), pcwstr(&title), flags) == IDYES }
 }
 
 fn refresh_ui() {
@@ -744,6 +801,10 @@ fn deliver(o: CaptureOutcome) {
     });
     if s.output.preview_in_editor && !explicit && !matches!(dest, Destination::Editor | Destination::Draw) {
         editor::open_image(image, capture_title(), auto_saved, Some(dest));
+        // A standalone command-line run now has an editor window: keep running properly.
+        if with_state(|st| st.exit_after_output) {
+            stay_running();
+        }
         return;
     }
     let exit_after = with_state(|st| st.exit_after_output);
@@ -802,7 +863,13 @@ fn output_path() -> PathBuf {
 fn temp_path() -> PathBuf {
     let dir = std::env::temp_dir().join("SnapForge");
     let _ = std::fs::create_dir_all(&dir);
-    let name = output_path().file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "capture".into());
+    // Only the name is wanted: peek, so the file-name counter is not used up.
+    let (folder, ext) = {
+        let s = settings::get();
+        (s.output_folder(), s.output.format.extension())
+    };
+    let peek = filename::peek_output_path(&folder, ext);
+    let name = peek.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "capture".into());
     dir.join(format!("{name}.png"))
 }
 
@@ -816,8 +883,7 @@ fn deliver_to(image: Image, dest: Destination, explicit_path: Option<PathBuf>, e
             }
             // A standalone CLI run that opens the editor keeps running in the tray.
             if exit_after {
-                with_state(|s| s.exit_after_output = false);
-                let _ = tray::create();
+                stay_running();
             }
         }
         Destination::Clipboard => {

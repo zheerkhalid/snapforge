@@ -194,6 +194,16 @@ pub fn build_registry(
         .keywords("merge join stitch"));
     add(Command::new("tools.pdf", t("editor-tool-pdf"), K::Tools, Action::ImagesToPdf).icon("📄"));
     add(Command::new("tools.batch_print", t("editor-tool-batch-print"), K::Tools, Action::BatchPrint).icon("🖶"));
+    add(Command::new("tools.hide_private", t("redact-command"), K::Tools, Action::HidePrivate)
+        .key("Ctrl+Shift+H")
+        .icon("🙈")
+        .when(c::editable)
+        .keywords("redact censor blur pixelate email e-mail phone card number privacy sensitive ocr"));
+    add(Command::new("tools.read_qr", t("qr-command"), K::Tools, Action::ReadQr)
+        .key("Ctrl+Shift+Q")
+        .icon("🔳")
+        .when(c::has_doc)
+        .keywords("qr code scan decode link barcode"));
     add(Command::new("tools.video_editor", t("menu-video-editor"), K::Tools, Action::VideoEditor)
         .icon("🎬")
         .keywords("video trim cut mp4 recording"));
@@ -511,6 +521,10 @@ impl EditorApp {
         }
         self.item(ui, "tools.settings");
         ui.separator();
+        for id in ["tools.hide_private", "tools.read_qr"] {
+            self.item(ui, id);
+        }
+        ui.separator();
         for id in ["tools.combine", "tools.pdf", "tools.batch_print"] {
             self.item(ui, id);
         }
@@ -563,6 +577,11 @@ impl EditorApp {
                 let tools: Vec<&str> = tools.iter().map(String::as_str).collect();
                 self.group(ui, "editor-group-tools", &tools);
                 self.group(ui, "editor-group-selection", &["edit.crop", "edit.new_tab", "edit.pin"]);
+                self.group(
+                    ui,
+                    "editor-group-share",
+                    &["effect:effects.beautify", "tools.hide_private", "tools.read_qr"],
+                );
                 self.zoom_group(ui);
                 self.active_tool_options(ui);
                 let cont = self.tabs.active().and_then(|d| d.continue_to);

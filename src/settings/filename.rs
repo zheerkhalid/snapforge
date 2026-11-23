@@ -178,16 +178,57 @@ pub fn build_path(
     (candidate, next)
 }
 
-/// Next output path using the live settings; persists the counter.
+/// Paths handed out by [`next_output_path`] whose file may not be on disk yet (saving runs
+/// on a worker thread). Without this, two captures in the same second would get the same
+/// name and the second would replace the first.
+#[derive(Default)]
+pub(crate) struct Reservations(Vec<PathBuf>);
+
+impl Reservations {
+    const MAX: usize = 256;
+
+    pub(crate) const fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Windows file names are case-insensitive.
+    pub(crate) fn contains(&self, p: &Path) -> bool {
+        let want = p.as_os_str().to_string_lossy().to_lowercase();
+        self.0.iter().any(|r| r.as_os_str().to_string_lossy().to_lowercase() == want)
+    }
+
+    pub(crate) fn add(&mut self, p: PathBuf) {
+        if self.0.len() >= Self::MAX {
+            self.0.remove(0);
+        }
+        self.0.push(p);
+    }
+}
+
+static RESERVED: std::sync::Mutex<Reservations> = std::sync::Mutex::new(Reservations::new());
+
+/// Next output path using the live settings; persists the counter and reserves the name,
+/// so the next call never returns it again even if the file has not been written yet.
 pub fn next_output_path(folder: &Path, ext: &str) -> PathBuf {
     let fs = super::get().filename.clone();
     let mut rng = Rng::from_entropy();
     let now = DateTime::now_local();
-    let (p, next) = build_path(&fs, folder, ext, &now, &mut rng, &default_env, &|p| p.exists());
+    let mut reserved = RESERVED.lock().unwrap_or_else(|e| e.into_inner());
+    let (p, next) = build_path(&fs, folder, ext, &now, &mut rng, &default_env, &|p| p.exists() || reserved.contains(p));
+    reserved.add(p.clone());
+    drop(reserved);
     if next != fs {
         super::update(|s| s.filename = next);
     }
     p
+}
+
+/// The path [`next_output_path`] would return, without using up the `###` counter or
+/// reserving the name: for suggested names (Save As) and temporary copies.
+pub fn peek_output_path(folder: &Path, ext: &str) -> PathBuf {
+    let fs = super::get().filename.clone();
+    let mut rng = Rng::from_entropy();
+    build_path(&fs, folder, ext, &DateTime::now_local(), &mut rng, &default_env, &|p| p.exists()).0
 }
 
 /// Text for the optional date/time stamp drawn on captures.
@@ -199,6 +240,42 @@ pub fn timestamp_text(format: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn captures_in_the_same_second_get_different_names() {
+        // Nothing is on disk yet (saving is asynchronous): only the reservations keep
+        // the second and third capture from taking the first one's name.
+        let fs = FileNameSettings {
+            template: "shot_$H$N$S".into(),
+            counter: 1,
+            reset_daily: false,
+            last_date: String::new(),
+        };
+        let folder = Path::new("C:\\out");
+        let mut reserved = Reservations::new();
+        let mut rng = Rng::new(1);
+        let mut names = Vec::new();
+        for _ in 0..3 {
+            let (p, _) = build_path(&fs, folder, "png", &t(), &mut rng, &env, &|p| reserved.contains(p));
+            reserved.add(p.clone());
+            names.push(p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+        }
+        assert_eq!(names, ["shot_090502.png", "shot_090502 (2).png", "shot_090502 (3).png"]);
+        // Case-insensitive, like the file system.
+        assert!(reserved.contains(Path::new("c:\\OUT\\SHOT_090502.PNG")));
+        assert!(!reserved.contains(Path::new("C:\\out\\other.png")));
+    }
+
+    #[test]
+    fn reservations_are_capped() {
+        let mut r = Reservations::new();
+        for i in 0..Reservations::MAX + 10 {
+            r.add(PathBuf::from(format!("f{i}.png")));
+        }
+        assert_eq!(r.0.len(), Reservations::MAX);
+        assert!(!r.contains(Path::new("f0.png")));
+        assert!(r.contains(Path::new("f265.png")));
+    }
 
     fn t() -> DateTime {
         DateTime { year: 2026, month: 3, day: 7, hour: 9, minute: 5, second: 2, millis: 0 }

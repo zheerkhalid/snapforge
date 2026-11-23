@@ -1,6 +1,6 @@
 [package]
 name = "snapforge"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 authors = ["Zheer Khalid (https://zheer.dev)"]
 description = "SnapForge - a fast, native Windows screen capture, annotation and recording tool"
@@ -35,6 +35,8 @@ zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 # Needed by `#[windows::core::implement]` (DirectWrite text renderer / outline sink in src/draw).
 # Animated GIF export in the video editor. Same version `image` already pulls in, so it adds no code.
 gif = "0.14"
+# QR code reading (Capture Text and the editor's Read QR Code). Pure Rust, no image-crate feature.
+rqrr = { version = "0.10", default-features = false }
 
 [dependencies.windows]
 version = "0.58"
@@ -104,6 +106,10 @@ features = [
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
 ]
+
+[dev-dependencies]
+# Draws QR codes for the reader's tests (not part of the app).
+qrcode = { version = "0.14", default-features = false }
 
 [build-dependencies]
 tiny-skia = "0.11"

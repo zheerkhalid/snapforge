@@ -622,6 +622,8 @@ impl EditorApp {
                 Err(e) => self.toast(tf("editor-open-failed", &[("name", &t("draw-tool-image")), ("error", &e)]), true),
             },
             JobResult::Toast(text) => self.toast(text, false),
+            JobResult::PrivateFound { doc, size, result } => self.on_redact_found(doc, size, result),
+            JobResult::QrRead(codes) => self.on_qr_read(codes),
         }
     }
 
@@ -684,6 +686,7 @@ impl EditorApp {
     }
 
     fn compute_cmd_state(&mut self) {
+        super::set_unsaved_count(self.tabs.docs.iter().filter(|d| d.dirty).count());
         let d = self.tabs.active();
         let busy = d.is_some_and(|d| d.busy()) || self.applying.is_some();
         self.cmd_state = CmdState {
@@ -930,7 +933,10 @@ impl EditorApp {
                 }
             }
             Action::Paste => {
-                let text = self.paste_text.take();
+                // Ctrl+V delivers the text through egui; Edit ▸ Paste, the right-click
+                // menu and the command palette have to read the clipboard themselves
+                // (copied annotations travel as text).
+                let text = self.paste_text.take().or_else(crate::output::clipboard::paste_text);
                 if let (Some(text), Some(d)) = (text, self.tabs.active_mut()) {
                     if annot::with_state(|s| s.paste_json(d, &text)) {
                         return;
@@ -979,12 +985,16 @@ impl EditorApp {
                             // Annotations keep their place on the picture.
                             let off = crate::draw::Pt::new(-sel.bounds.x as f32, -sel.bounds.y as f32);
                             if d.has_annotations() && (off.x != 0.0 || off.y != 0.0) {
-                                annot::layer::edit(d, "Crop", |objs| {
+                                let moved = annot::layer::edit(d, "Crop", |objs| {
                                     for o in objs.iter_mut() {
                                         crate::draw::translate(o, off);
                                     }
                                     true
                                 });
+                                // One Undo takes the crop and the move together.
+                                if moved {
+                                    d.link_last_step();
+                                }
                             }
                         }
                     }
@@ -1010,6 +1020,8 @@ impl EditorApp {
             Action::CombineImages => super::tools_host().combine_images(self.tools_context()),
             Action::ImagesToPdf => super::tools_host().images_to_pdf(self.tools_context()),
             Action::BatchPrint => super::tools_host().batch_print(self.tools_context()),
+            Action::HidePrivate => self.open_redact(),
+            Action::ReadQr => self.start_read_qr(),
             Action::VideoEditor => {
                 self.video.open(None);
                 self.video_icon_done = false;
@@ -1202,14 +1214,7 @@ impl EditorApp {
             self.pending_steps = None;
             return;
         };
-        while n != 0 && !d.busy() {
-            let ok = if n > 0 { d.undo() } else { d.redo() };
-            if !ok {
-                n = 0;
-                break;
-            }
-            n -= n.signum();
-        }
+        n = d.step_many(n);
         self.pending_steps = (n != 0).then_some((id, n));
     }
 
@@ -1408,7 +1413,7 @@ impl EditorApp {
     }
 
     /// Finish in-progress drawing (text being typed, polylines) before exporting.
-    fn finish_draw(&mut self) {
+    pub(super) fn finish_draw(&mut self) {
         if let Some(d) = self.tabs.active_mut() {
             annot::with_state(|s| s.finish_pending(d));
         }

@@ -138,6 +138,33 @@ impl Selection {
         }
     }
 
+    /// The part of the selection inside `area` (`None` when nothing is left). Pasted or
+    /// moved pixels may hang over the edge of the picture; once they are merged, the
+    /// selection must lie inside it again, or effects and Delete would work on a
+    /// rectangle that does not match the pixels they are given.
+    pub fn clipped(&self, area: Rect) -> Option<Selection> {
+        let r = self.bounds.intersect(&area);
+        if r.is_empty() {
+            return None;
+        }
+        if r == self.bounds {
+            return Some(self.clone());
+        }
+        let Some(mask) = &self.mask else { return Selection::rect(r) };
+        let (bw, bh) = (self.bounds.w.max(0) as usize, self.bounds.h.max(0) as usize);
+        if mask.len() != bw * bh {
+            return Selection::rect(r);
+        }
+        let (ox, oy) = ((r.x - self.bounds.x) as usize, (r.y - self.bounds.y) as usize);
+        let (w, h) = (r.w as usize, r.h as usize);
+        let mut out = Vec::with_capacity(w * h);
+        for y in 0..h {
+            let row = (oy + y) * bw + ox;
+            out.extend_from_slice(&mask[row..row + w]);
+        }
+        Some(Selection { bounds: r, mask: Some(Arc::new(out)), outline: self.outline.clone() })
+    }
+
     /// The selected pixels (outside a freehand mask transparent).
     pub fn extract(&self, img: &Image) -> Image {
         let mut out = img.crop(self.bounds);
@@ -502,6 +529,30 @@ mod tests {
         // Degenerate polygons are rejected.
         assert!(Selection::freehand(&[[0.0, 0.0], [5.0, 5.0]], Rect::new(0, 0, 9, 9)).is_none());
         assert!(Selection::freehand(&[[0.0, 0.0], [5.0, 0.0], [10.0, 0.0]], Rect::new(0, 0, 9, 9)).is_none());
+    }
+
+    #[test]
+    fn clipped_keeps_the_part_inside_the_picture() {
+        let area = Rect::new(0, 0, 10, 10);
+        // Inside: unchanged. Overhanging: cut. Outside: gone.
+        let inside = Selection::rect(Rect::new(2, 2, 3, 3)).expect("sel");
+        assert_eq!(inside.clipped(area), Some(inside.clone()));
+        let over = Selection::rect(Rect::new(-4, 6, 8, 8)).expect("sel");
+        let c = over.clipped(area).expect("clipped");
+        assert_eq!(c.bounds, Rect::new(0, 6, 4, 4));
+        assert!(c.mask.is_none());
+        assert!(c.contains(0, 6) && c.contains(3, 9) && !c.contains(4, 6));
+        assert!(Selection::rect(Rect::new(20, 20, 5, 5)).expect("sel").clipped(area).is_none());
+        // A mask keeps exactly the rows and columns that are left.
+        let mask: Vec<u8> = (0..16u8).collect();
+        let free = Selection { bounds: Rect::new(8, -1, 4, 4), mask: Some(Arc::new(mask)), outline: Vec::new() };
+        let c = free.clipped(area).expect("clipped");
+        assert_eq!(c.bounds, Rect::new(8, 0, 2, 3));
+        assert_eq!(c.mask.as_deref().map(|m| m.as_slice()), Some(&[4u8, 5, 8, 9, 12, 13][..]));
+        // What it extracts now has the size of its bounds.
+        let img = Image::filled(10, 10, [1, 2, 3, 255]);
+        let out = c.extract(&img);
+        assert_eq!((out.width, out.height), (2, 3));
     }
 
     #[test]
